@@ -1,0 +1,95 @@
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+import Database from "better-sqlite3";
+
+export function getBoostinHome(): string {
+  return (
+    process.env.BOOSTIN_HOME ??
+    join(homedir(), "Library", "Application Support", "Boostin")
+  );
+}
+
+export function getDatabasePath(): string {
+  return join(getBoostinHome(), "boostin.db");
+}
+
+export interface OpenDatabaseResult {
+  database: Database.Database;
+  path: string;
+  created: boolean;
+}
+
+export function openDatabase(): OpenDatabaseResult {
+  const home = getBoostinHome();
+  const path = getDatabasePath();
+  mkdirSync(home, { recursive: true, mode: 0o700 });
+  const created = !existsSync(path);
+  const database = new Database(path);
+  chmodSync(path, 0o600);
+  database.pragma("journal_mode = WAL");
+  database.pragma("foreign_keys = ON");
+  database.pragma("user_version = 1");
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS imports (
+      id INTEGER PRIMARY KEY,
+      kind TEXT NOT NULL,
+      checksum TEXT NOT NULL UNIQUE,
+      fingerprint TEXT NOT NULL,
+      imported_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      published_at TEXT NOT NULL,
+      body TEXT NOT NULL,
+      url TEXT,
+      visibility TEXT,
+      source_checksum TEXT NOT NULL,
+      deleted_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS analytics_snapshots (
+      id INTEGER PRIMARY KEY,
+      post_id TEXT NOT NULL REFERENCES posts(id),
+      captured_at TEXT NOT NULL,
+      impressions INTEGER NOT NULL,
+      members_reached INTEGER,
+      reactions INTEGER NOT NULL,
+      comments INTEGER NOT NULL,
+      reposts INTEGER NOT NULL,
+      saves INTEGER,
+      sends INTEGER,
+      out_of_network_percent REAL,
+      UNIQUE(post_id, captured_at)
+    );
+    CREATE TABLE IF NOT EXISTS profile_snapshots (
+      captured_at TEXT PRIMARY KEY,
+      followers INTEGER,
+      profile_views INTEGER,
+      search_appearances INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS drafts (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      pillar TEXT,
+      audience TEXT,
+      status TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS outcomes (
+      id TEXT PRIMARY KEY,
+      occurred_at TEXT NOT NULL,
+      type TEXT NOT NULL,
+      count INTEGER NOT NULL,
+      note TEXT
+    );
+  `);
+  return { database, path, created };
+}

@@ -1,0 +1,122 @@
+---
+title: "I built content analytics that refuses to log in for me"
+description: "A build note on Boostin, a local-first CLI for learning from my own professional content without scraping, browser automation, or engagement bots."
+seoTitle: "Local-first content analytics without scraping"
+publishedAt: 2026-07-21
+updatedAt: 2026-07-21
+tags:
+  - content-strategy
+  - product-architecture
+  - building-in-public
+topics: []
+answerSummary:
+  - Import-only analytics can reveal useful content patterns without scraping a professional network or automating engagement.
+  - A local SQLite database protected by FileVault keeps the working dataset inspectable and under the author's control.
+  - Public reports should be generated from an explicit allowlist of aggregate fields, not by redacting a private report after the fact.
+  - Human-controlled publishing is a product boundary, not a missing feature.
+faqs:
+  - question: Does Boostin automate posting or engagement?
+    answer: No. It does not log in, scrape pages, send messages, react, comment, follow, or publish. Drafting and publishing remain human-controlled.
+  - question: Where does the imported data go?
+    answer: Boostin stores it in a local SQLite database. On macOS, real-data imports require FileVault to be enabled, and portable backups are independently encrypted with a passphrase.
+  - question: What data can Boostin import?
+    answer: The first release accepts the author's own official account archive and first-party post analytics workbook. It rejects unknown schemas instead of guessing.
+draft: true
+---
+
+I wanted a better way to learn from my professional content without building another tool that quietly logs into an account and starts behaving like me.
+
+That constraint shaped Boostin, an open-source, local-first command-line tool for importing my own posts and first-party analytics, producing weekly reports, keeping drafts, and recording outcomes I can verify myself.
+
+The reusable part was not another dashboard. It was the boundary around the dashboard.
+
+## What I was trying to build
+
+I wanted one durable place to answer practical questions:
+
+- Which topics are reaching people outside my existing network?
+- Which posts create real conversations instead of shallow reactions?
+- What did I publish, and what was I trying to learn from it?
+- Are profile views, search appearances, or qualified conversations changing over time?
+
+The tempting version was an agent connected directly to a professional network. It could read the feed, inspect profiles, collect comments, publish drafts, and perhaps even engage automatically.
+
+That version would also create the largest trust and platform-risk surface.
+
+LinkedIn's [User Agreement](https://www.linkedin.com/legal/user-agreement) prohibits scraping and unauthorized automated access, including bots that create or drive engagement. LinkedIn already provides an official [account-data download](https://www.linkedin.com/help/linkedin/answer/a1339364/downloading-your-account-data), so I chose the smaller and more legible input boundary: files the account owner explicitly exports.
+
+Boostin never needs a LinkedIn password, session cookie, browser profile, or API key.
+
+## What made it harder than expected
+
+"It only imports files" sounds safe until the files become adversarial.
+
+A ZIP archive can contain path traversal, symbolic links, duplicate names, Unicode-normalization tricks, decompression bombs, or nested structures the importer was not designed to understand. A spreadsheet is a ZIP of XML files, which adds entity expansion, unexpected worksheets, malformed cell references, and schema drift.
+
+The importer therefore has strict limits for archive size, extracted size, entry size, compression ratio, sheet count, and row count. It rejects unsafe paths and XML declarations. It reads only the filenames it expects.
+
+It also fails closed on columns. If a platform export renames `Impressions` to `Views`, Boostin aborts the import transaction and reports the schema mismatch. It does not guess that the two fields are equivalent.
+
+That is less convenient than a fuzzy importer. It is also much easier to trust.
+
+## The pattern that emerged
+
+The product settled into four boundaries.
+
+### 1. Import, do not impersonate
+
+Boostin accepts the author's own account archive and first-party analytics export. It does not open a browser, call private endpoints, scrape profiles, or operate the account.
+
+Drafting is allowed. Publishing is deliberately outside the tool.
+
+### 2. Bind the database to one identity
+
+The first account archive binds the local database to its public profile identifier. A later archive for a different profile is rejected. When a newer full archive no longer includes a previously imported post, the post is tombstoned instead of silently deleted.
+
+That preserves history without mixing identities.
+
+### 3. Make private and public reports different products
+
+The private weekly report can include post text and detailed context. The public report is built from an allowlist of aggregate metrics and requires an explicit confirmation flag.
+
+This is not a redaction pipeline. The public generator never receives the private prose fields it is forbidden to emit.
+
+That distinction matters because redaction asks, "Did I remember every secret?" An allowlist asks, "Which fields have I deliberately approved?"
+
+### 4. Use ordinary local storage with explicit backup security
+
+The live database is ordinary SQLite with restrictive file permissions. On macOS, Boostin blocks real-data imports unless FileVault is enabled. Apple describes FileVault as its built-in capability for protecting data at rest across a volume ([Apple Platform Security](https://support.apple.com/guide/security/sec4c6dc1b6e/web)).
+
+Portable backups have a different threat model. They may leave the machine, so Boostin encrypts each backup independently with a passphrase-derived key and authenticated encryption. A wrong passphrase fails before a database is written.
+
+This keeps the live database easy to inspect and repair while making exported backups portable without depending on one machine's keychain.
+
+## What I would reuse
+
+I would reuse the same structure for other personal analytics tools:
+
+```text
+official export -> strict parser -> transactional local store
+                                 -> private analysis
+                                 -> allowlisted public summary
+```
+
+I would also keep a value-free fingerprint command. When an export format changes, the user can share filenames, headers, row counts, and a schema hash without sharing the actual content. That gives maintainers enough structure to reproduce a parser change with synthetic fixtures.
+
+The tests use fabricated profiles, posts, URLs, and metrics. The public repository has a check that rejects likely personal archives, analytics workbooks, databases, backups, and private reports before they enter source control.
+
+## What I would change next time
+
+I would define the public-report schema before implementing the private report. The separation is clearer when privacy is a data-flow decision from the first table and query, not a final formatting pass.
+
+I would also write the archive threat model before the parser. File importers look like plumbing, but they are security boundaries whenever a user opens data produced elsewhere.
+
+The next useful work is intentionally unglamorous: more real export fingerprints, versioned schema adapters, documented migrations, and better explanations when a platform changes its format.
+
+## Caveats
+
+Boostin does not prove that a post caused a business outcome. Impressions, reactions, profile views, and self-reported conversations are signals with different levels of confidence. The tool keeps them separate rather than turning them into a single magic score.
+
+It also does not promise growth through automation. The point is to help a person make better decisions, draft with more context, publish deliberately, and stay responsible for every interaction.
+
+The project is available on [GitHub](https://github.com/juniorlovestmh/boostin). The article remains a draft until I have dogfooded the import and reporting flow against exports I am comfortable using locally.

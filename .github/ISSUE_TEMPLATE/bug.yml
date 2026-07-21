@@ -1,0 +1,27 @@
+name: Bug report
+description: Report a reproducible problem using synthetic data only
+title: "bug: "
+labels: [needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: Never attach real exports, analytics, databases, reports, profile identifiers, or screenshots of private data.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observable behavior
+      description: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: fingerprint
+    attributes:
+      label: Value-free fingerprint
+      description: Output from boostin doctor --fingerprint, or explain why unavailable.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Synthetic reproduction
+      description: Provide steps using generated or invented data only.
+    validations:
+      required: true
