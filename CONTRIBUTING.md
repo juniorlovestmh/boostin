@@ -1,7 +1,9 @@
 # Contributing
 
-Use GitHub Issues and the configured triage labels. Normal development targets
-`beta`; `main` receives releases by pull request.
+Use GitHub Issues and the configured triage labels. Create normal work on a
+short-lived `dev/*` branch from `staging`, then open a pull request back to
+`staging`. Release candidates move from `staging` to `main` by pull request.
+Do not commit feature work directly to `main` or `staging`.
 
 Hard boundaries:
 
