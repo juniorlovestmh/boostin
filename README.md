@@ -31,12 +31,8 @@ pnpm validate
 
 Only synthetic fixtures belong in this repository.
 
-### Branch model
-
-- `main` is production.
-- `staging` is the integration branch and source for release pull requests.
-- `dev/*` branches are short-lived work branches created from and merged back
-  into `staging`.
+`main` is production. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch
+workflow.
 
 ## Quick start
 
