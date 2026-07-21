@@ -8,7 +8,10 @@ other people's content.
 ## Development
 
 - Use Node 22 and pnpm.
-- Normal work happens on `beta`; release to `main` by pull request.
+- Create short-lived `dev/*` branches from `staging` for normal work.
+- Merge `dev/*` branches into `staging` by pull request. Promote releases from
+  `staging` to `main` by pull request; never commit feature work directly to
+  `main` or `staging`.
 - Begin behavior changes with an observable failing test through the CLI.
 - Keep real exports, analytics files, databases, private reports, account
   identifiers, and credentials out of Git, issues, logs, and fixtures.

@@ -31,6 +31,9 @@ pnpm validate
 
 Only synthetic fixtures belong in this repository.
 
+`main` is production. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch
+workflow.
+
 ## Quick start
 
 Real imports are intentionally blocked until FileVault is enabled:
