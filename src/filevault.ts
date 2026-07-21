@@ -2,9 +2,20 @@ import { execFileSync } from "node:child_process";
 
 export type FileVaultStatus = "On" | "Off" | "Unknown";
 
+function isTestModeActive(): boolean {
+  return (
+    process.env.VITEST === "true" ||
+    process.env.NODE_ENV === "test" ||
+    process.env.CI === "true"
+  );
+}
+
 export function getFileVaultStatus(): FileVaultStatus {
   const override = process.env.BOOSTIN_FILEVAULT_STATUS;
-  if (override === "On" || override === "Off" || override === "Unknown") {
+  if (
+    isTestModeActive() &&
+    (override === "On" || override === "Off" || override === "Unknown")
+  ) {
     return override;
   }
 
