@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 
-import { getFileVaultStatus } from "../src/filevault.ts";
+import { getFileVaultStatus } from "../src/filevault.js";
 
 describe("getFileVaultStatus", () => {
   const savedEnv = {
