@@ -1,0 +1,47 @@
+{
+  "name": "boostin",
+  "version": "0.1.0",
+  "description": "Local-first professional content analytics without scraping or automated engagement.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "boostin": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit && eslint .",
+    "check:public": "node scripts/check-public-repo.mjs",
+    "fixtures:generate": "tsx scripts/generate-synthetic-fixtures.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "validate": "pnpm check:public && pnpm check && pnpm test && pnpm build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "commander": "^14.0.3",
+    "csv-parse": "^6.1.0",
+    "fast-xml-parser": "^5.3.6",
+    "yauzl": "^3.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.1",
+    "@types/yauzl": "^2.10.3",
+    "@types/yazl": "^3.3.0",
+    "eslint": "^9.39.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.51.0",
+    "vitest": "^4.0.18",
+    "yazl": "^3.3.1"
+  }
+}
