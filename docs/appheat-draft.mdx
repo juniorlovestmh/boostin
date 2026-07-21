@@ -101,7 +101,7 @@ official export -> strict parser -> transactional local store
                                  -> allowlisted public summary
 ```
 
-I would also keep a value-free fingerprint command. When an export format changes, the user can share filenames, headers, row counts, and a schema hash without sharing the actual content. That gives maintainers enough structure to reproduce a parser change with synthetic fixtures.
+I would also keep a value-free fingerprint command. When an export format changes, the user can share filenames, allowlisted recognized field names, row and column counts, and a schema hash without sharing the actual content. That gives maintainers enough structure to reproduce a parser change with synthetic fixtures.
 
 The tests use fabricated profiles, posts, URLs, and metrics. The public repository has a check that rejects likely personal archives, analytics workbooks, databases, backups, and private reports before they enter source control.
 
