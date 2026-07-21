@@ -56,4 +56,37 @@ describe("doctor", () => {
     expect(fingerprint).not.toContain("posts/private");
     expect(fingerprint).not.toContain("9876");
   });
+
+  test("never emits arbitrary cells when a workbook is transposed or malformed", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-doctor-transposed-"));
+    const home = join(root, "home");
+    const workbook = join(root, "legacy-analytics.xlsx");
+    await createXlsx(workbook, [
+      ["Post URL", "https://social.example/posts/private"],
+      ["Impressions", "9876"],
+    ]);
+
+    const fingerprint = run(home, ["doctor", "--fingerprint", workbook, "--json"]);
+    expect(fingerprint).toContain("Post URL");
+    expect(fingerprint).not.toContain("posts/private");
+    expect(fingerprint).not.toContain("9876");
+  });
+
+  test("never emits arbitrary CSV header cells", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-doctor-csv-header-"));
+    const home = join(root, "home");
+    const archive = join(root, "malformed.zip");
+    await createZip(archive, {
+      "Profile.csv":
+        "First Name,https://social.example/profiles/private\nSynthetic,private value\n",
+      "Shares.csv":
+        "Date,ShareCommentary,private customer name\n2026-07-20,Synthetic post,private value\n",
+    });
+
+    const fingerprint = run(home, ["doctor", "--fingerprint", archive, "--json"]);
+    expect(fingerprint).toContain("First Name");
+    expect(fingerprint).toContain("ShareCommentary");
+    expect(fingerprint).not.toContain("profiles/private");
+    expect(fingerprint).not.toContain("private customer name");
+  });
 });

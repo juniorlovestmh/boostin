@@ -9,6 +9,23 @@ import { getDatabasePath } from "./database.js";
 import { getFileVaultStatus } from "./filevault.js";
 import { readFirstWorksheet } from "./xlsx.js";
 
+const ANALYTICS_FIELDS = new Set([
+  "Post URL",
+  "Impressions",
+  "Members reached",
+  "Reactions",
+  "Comments",
+  "Reposts",
+  "Saves",
+  "Sends",
+  "Out-of-network %",
+]);
+
+const ARCHIVE_FIELDS: Record<string, ReadonlySet<string>> = {
+  "Profile.csv": new Set(["First Name", "Last Name", "Public Profile URL"]),
+  "Shares.csv": new Set(["Date", "ShareLink", "ShareCommentary", "Visibility"]),
+};
+
 export interface DoctorResult {
   fileVault: string;
   databaseExists: boolean;
@@ -34,13 +51,19 @@ export function runDoctor(): DoctorResult {
 export async function fingerprintArchive(path: string): Promise<Record<string, unknown>> {
   if (extname(path).toLowerCase() === ".xlsx") {
     const workbook = await readFirstWorksheet(path);
-    const columns = workbook.rows[0] ?? [];
+    const recognizedFields = [
+      ...new Set(workbook.rows.flat().filter((cell) => ANALYTICS_FIELDS.has(cell))),
+    ].sort();
+    const dimensions = {
+      rowCount: workbook.rows.length,
+      columnCount: Math.max(0, ...workbook.rows.map((row) => row.length)),
+    };
     return {
       kind: "first-party-analytics-workbook",
       schemaFingerprint: createHash("sha256")
-        .update(JSON.stringify(columns))
+        .update(JSON.stringify({ recognizedFields, dimensions }))
         .digest("hex"),
-      sheets: [{ name: "sheet1", columns, rowCount: Math.max(0, workbook.rows.length - 1) }],
+      sheets: [{ name: "sheet1", recognizedFields, ...dimensions }],
     };
   }
   const archive = await readAllowedArchive(
@@ -51,9 +74,14 @@ export async function fingerprintArchive(path: string): Promise<Record<string, u
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, buffer]) => {
       const rows = parse(buffer, { bom: true, skip_empty_lines: true }) as string[][];
+      const header = rows[0] ?? [];
+      const recognizedColumns = header.filter((column) =>
+        ARCHIVE_FIELDS[name]?.has(column),
+      );
       return {
         name,
-        columns: rows[0] ?? [],
+        recognizedColumns,
+        columnCount: header.length,
         rowCount: Math.max(0, rows.length - 1),
       };
     });
