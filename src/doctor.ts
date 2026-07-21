@@ -75,9 +75,9 @@ export async function fingerprintArchive(path: string): Promise<Record<string, u
     .map(([name, buffer]) => {
       const rows = parse(buffer, { bom: true, skip_empty_lines: true }) as string[][];
       const header = rows[0] ?? [];
-      const recognizedColumns = header.filter((column) =>
-        ARCHIVE_FIELDS[name]?.has(column),
-      );
+      const recognizedColumns = [
+        ...new Set(rows.flat().filter((cell) => ARCHIVE_FIELDS[name]?.has(cell))),
+      ].sort();
       return {
         name,
         recognizedColumns,

@@ -89,4 +89,24 @@ describe("doctor", () => {
     expect(fingerprint).not.toContain("profiles/private");
     expect(fingerprint).not.toContain("private customer name");
   });
+
+  test("recognizes fields in a transposed or legacy CSV archive without exposing values", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-doctor-csv-transposed-"));
+    const home = join(root, "home");
+    const archive = join(root, "legacy.zip");
+    await createZip(archive, {
+      "Profile.csv":
+        "Export Version,2026,Q3\nFirst Name,Last Name,Public Profile URL\nSecret,Person,https://example.invalid/private\n",
+      "Shares.csv":
+        "Export Version,2026,Q3,Legacy\nDate,ShareLink,ShareCommentary,Visibility\n2026-07-20,https://example.invalid/post,Highly private prose,PUBLIC\n",
+    });
+
+    const fingerprint = run(home, ["doctor", "--fingerprint", archive, "--json"]);
+
+    expect(fingerprint).toContain("First Name");
+    expect(fingerprint).toContain("ShareCommentary");
+    expect(fingerprint).not.toContain("Secret");
+    expect(fingerprint).not.toContain("Highly private prose");
+    expect(fingerprint).not.toContain("example.invalid");
+  });
 });
