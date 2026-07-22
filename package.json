@@ -4,6 +4,7 @@
   "description": "Local-first professional content analytics without scraping or automated engagement.",
   "type": "module",
   "license": "MIT",
+  "packageManager": "pnpm@11.7.0",
   "bin": {
     "boostin": "dist/cli.js"
   },

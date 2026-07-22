@@ -21,6 +21,27 @@ function run(home: string, args: string[]): string {
 }
 
 describe("analytics import", () => {
+  test.each([
+    `<?xml version="1.0"?><!DOCTYPE workbook [<!ENTITY synthetic "value">]>`,
+    `<?xml version="1.0"?><!ENTITY synthetic "value">`,
+  ])("rejects prohibited workbook XML declarations", async (xmlPrefix) => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-hostile-xml-"));
+    const home = join(root, "home");
+    const analytics = join(root, "hostile.xlsx");
+    await createXlsx(analytics, [["Post URL"]], xmlPrefix);
+
+    expect(() =>
+      run(home, [
+        "import",
+        "analytics",
+        analytics,
+        "--captured-at",
+        "2026-07-21T12:00:00.000Z",
+        "--json",
+      ]),
+    ).toThrow(/XLSX contains prohibited XML declarations/);
+  });
+
   test("adds a metric snapshot to the matching post", async () => {
     const root = mkdtempSync(join(tmpdir(), "boostin-analytics-"));
     const home = join(root, "home");
