@@ -21,9 +21,11 @@ describe("getFileVaultStatus", () => {
     delete process.env.VITEST;
     delete process.env.NODE_ENV;
     delete process.env.CI;
-    process.env.BOOSTIN_FILEVAULT_STATUS = "On";
+    delete process.env.BOOSTIN_FILEVAULT_STATUS;
+    const systemStatus = getFileVaultStatus();
+    process.env.BOOSTIN_FILEVAULT_STATUS = systemStatus === "On" ? "Off" : "On";
 
-    expect(getFileVaultStatus()).not.toBe("On");
+    expect(getFileVaultStatus()).toBe(systemStatus);
   });
 
   test("honors the override when running under Vitest", () => {

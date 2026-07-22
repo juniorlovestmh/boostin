@@ -1,12 +1,16 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, test } from "vitest";
 import Database from "better-sqlite3";
 
-import { createZip } from "./helpers/archive.js";
+import {
+  createZip,
+  replaceZipEntryName,
+  setZipEntrySizes,
+} from "./helpers/archive.js";
 
 function run(home: string, args: string[]): string {
   return execFileSync(
@@ -25,6 +29,102 @@ function run(home: string, args: string[]): string {
 }
 
 describe("post archive import", () => {
+  test.each([
+    ["path traversal", "safe000.csv", "../evil.csv"],
+    ["absolute paths", "safe-file", "/evil.csv"],
+  ])("rejects archive entries using %s", async (_label, safeName, unsafeName) => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-hostile-path-"));
+    const home = join(root, "home");
+    const archive = join(root, "hostile.zip");
+    await createZip(archive, { [safeName]: "synthetic" });
+    replaceZipEntryName(archive, safeName, unsafeName);
+
+    expect(() => run(home, ["import", "posts", archive, "--json"])).toThrow(
+      /invalid relative path|absolute path|Unsafe archive entry/,
+    );
+  });
+
+  test("rejects symbolic-link archive entries", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-hostile-symlink-"));
+    const home = join(root, "home");
+    const archive = join(root, "hostile.zip");
+    await createZip(
+      archive,
+      { "Profile.csv": "Shares.csv" },
+      { "Profile.csv": { mode: 0o120777 } },
+    );
+
+    expect(() => run(home, ["import", "posts", archive, "--json"])).toThrow(
+      /Symbolic links are not allowed/,
+    );
+  });
+
+  test("rejects entries over the compression-ratio limit", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-hostile-ratio-"));
+    const home = join(root, "home");
+    const archive = join(root, "hostile.zip");
+    await createZip(archive, { "compressed.bin": "0".repeat(1024 * 1024) });
+
+    expect(() => run(home, ["import", "posts", archive, "--json"])).toThrow(
+      /compression ratio limit/,
+    );
+  });
+
+  test("rejects entries over the uncompressed-size limit", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-hostile-entry-size-"));
+    const home = join(root, "home");
+    const archive = join(root, "hostile.zip");
+    await createZip(archive, { "oversized.bin": "0" });
+    setZipEntrySizes(
+      archive,
+      new Map([
+        [
+          "oversized.bin",
+          { compressed: 2 * 1024 * 1024, uncompressed: 100 * 1024 * 1024 + 1 },
+        ],
+      ]),
+    );
+
+    expect(() => run(home, ["import", "posts", archive, "--json"])).toThrow(
+      /Archive entry exceeds 100 MB/,
+    );
+  });
+
+  test("rejects archives over the total uncompressed-size limit", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-hostile-total-size-"));
+    const home = join(root, "home");
+    const archive = join(root, "hostile.zip");
+    const entries = Object.fromEntries(
+      Array.from({ length: 11 }, (_, index) => [`part-${index}.bin`, "0"]),
+    );
+    await createZip(archive, entries);
+    setZipEntrySizes(
+      archive,
+      new Map(
+        Object.keys(entries).map((name) => [
+          name,
+          { compressed: 2 * 1024 * 1024, uncompressed: 100 * 1024 * 1024 },
+        ]),
+      ),
+    );
+
+    expect(() => run(home, ["import", "posts", archive, "--json"])).toThrow(
+      /Archive exceeds 1 GB/,
+    );
+  });
+
+  test("rejects archives over the compressed-size limit before parsing", () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-hostile-size-"));
+    const home = join(root, "home");
+    const archive = join(root, "hostile.zip");
+    writeFileSync(archive, "", { mode: 0o600 });
+    truncateSync(archive, 500 * 1024 * 1024 + 1);
+
+    expect(() => run(home, ["import", "posts", archive, "--json"])).toThrow(
+      /Archive exceeds 500 MB/,
+    );
+  });
+
   test("imports the user's own posts once and binds the profile identity", async () => {
     const root = mkdtempSync(join(tmpdir(), "boostin-posts-"));
     const home = join(root, "home");
