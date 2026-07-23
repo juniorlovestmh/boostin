@@ -65,6 +65,17 @@ export interface GraphBuildResult {
   html: string;
 }
 
+export interface CuratedGraphResult {
+  graph: string;
+  html: string;
+  report: string;
+  evidence: string;
+  nodes: number;
+  edges: number;
+  components: number;
+  isolated: number;
+}
+
 function mkdirPrivate(path: string): void {
   mkdirSync(path, { recursive: true, mode: 0o700 });
   chmodSync(path, 0o700);
@@ -168,6 +179,48 @@ function graphEdges(graph: GraphDocument): GraphEdge[] {
   if (Array.isArray(graph.edges)) return graph.edges;
   if (Array.isArray(graph.links)) return graph.links;
   throw new Error("Graph health check failed: unsupported graph.json shape");
+}
+
+function graphShape(graph: GraphDocument): {
+  nodes: number;
+  edges: number;
+  components: number;
+  isolated: number;
+} {
+  if (!Array.isArray(graph.nodes)) {
+    throw new Error("Graph health check failed: unsupported graph.json shape");
+  }
+  const edges = graphEdges(graph);
+  const adjacency = new Map(
+    graph.nodes.map((node) => [node.id, new Set<string>()]),
+  );
+  for (const edge of edges) {
+    adjacency.get(edge.source)?.add(edge.target);
+    adjacency.get(edge.target)?.add(edge.source);
+  }
+  const visited = new Set<string>();
+  let components = 0;
+  for (const id of adjacency.keys()) {
+    if (visited.has(id)) continue;
+    components += 1;
+    const pending = [id];
+    visited.add(id);
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      for (const neighbor of adjacency.get(current) ?? []) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        pending.push(neighbor);
+      }
+    }
+  }
+  return {
+    nodes: graph.nodes.length,
+    edges: edges.length,
+    components,
+    isolated: [...adjacency.values()].filter((neighbors) => neighbors.size === 0)
+      .length,
+  };
 }
 
 function assertGraphHealth(path: string): void {
@@ -537,6 +590,228 @@ export function graphStatus(): Record<string, unknown> {
   } finally {
     database.close();
   }
+}
+
+export function curateProfessionalGraph(input: {
+  run: string;
+  review: string;
+}): CuratedGraphResult {
+  if (input.run !== "latest") {
+    throw new Error("run currently supports only latest");
+  }
+  const status = graphStatus();
+  if (status.status !== "completed") {
+    throw new Error("Latest graph run is not complete");
+  }
+  const rawGraphPath = join(
+    String(status.output_path),
+    "graphify-out",
+    "graph.json",
+  );
+  const rawGraph = JSON.parse(
+    readFileSync(rawGraphPath, "utf8"),
+  ) as GraphDocument;
+  if (!Array.isArray(rawGraph.nodes)) {
+    throw new Error("Latest graph.json has an unsupported shape");
+  }
+  const rawEdges = graphEdges(rawGraph);
+  const rawNodeIds = new Set(rawGraph.nodes.map((node) => node.id));
+  const review = readAllowlist(input.review);
+  if (
+    review.title.length > 100 ||
+    review.nodes.length > 50 ||
+    review.edges.length > 100
+  ) {
+    throw new Error("Curated graph review exceeds its size limits");
+  }
+
+  const publicIds = new Set<string>();
+  const sourceIds = new Set<string>();
+  const curatedNodes = review.nodes.map((node, index) => {
+    if (
+      !node.id ||
+      !node.label ||
+      node.label.length > 80 ||
+      /human readable name|stem entity|placeholder/i.test(node.label)
+    ) {
+      throw new Error(`Curated node has an invalid label: ${node.id}`);
+    }
+    if (!rawNodeIds.has(node.sourceId)) {
+      throw new Error(
+        `Curated node source is not present in the private graph: ${node.id}`,
+      );
+    }
+    if (publicIds.has(node.id)) {
+      throw new Error(`Duplicate curated node id: ${node.id}`);
+    }
+    if (sourceIds.has(node.sourceId)) {
+      throw new Error(`Duplicate curated source id: ${node.sourceId}`);
+    }
+    publicIds.add(node.id);
+    sourceIds.add(node.sourceId);
+    return {
+      id: node.id,
+      label: node.label,
+      norm_label: node.label.toLowerCase(),
+      kind: node.kind ?? "concept",
+      review_status: "HUMAN_APPROVED",
+      file_type: "curated",
+      source_file: "CURATION_EVIDENCE.json",
+      source_location: `review:nodes[${index}]`,
+    };
+  });
+  const sourceByPublic = new Map(
+    review.nodes.map((node) => [node.id, node.sourceId]),
+  );
+  const edgeKeys = new Set<string>();
+  const curatedEdges = review.edges.map((edge, index) => {
+    const sourceId = sourceByPublic.get(edge.source);
+    const targetId = sourceByPublic.get(edge.target);
+    if (
+      !sourceId ||
+      !targetId ||
+      edge.source === edge.target ||
+      !edge.label ||
+      edge.label.length > 60
+    ) {
+      throw new Error(
+        `Curated edge is invalid: ${edge.source} -> ${edge.target}`,
+      );
+    }
+    const edgeKey = [edge.source, edge.target].sort().join("\0");
+    if (edgeKeys.has(edgeKey)) {
+      throw new Error(
+        `Duplicate curated edge: ${edge.source} -> ${edge.target}`,
+      );
+    }
+    edgeKeys.add(edgeKey);
+    const privateEdge = rawEdges.find(
+      (candidate) =>
+        (candidate.source === sourceId && candidate.target === targetId) ||
+        (candidate.source === targetId && candidate.target === sourceId),
+    );
+    let confidence = "HUMAN_APPROVED";
+    if (privateEdge) {
+      confidence = (privateEdge.confidence ?? "AMBIGUOUS").toUpperCase();
+      if (confidence === "AMBIGUOUS") {
+        throw new Error(
+          `Ambiguous edge cannot enter the curated graph: ${edge.source} -> ${edge.target}`,
+        );
+      }
+      if (confidence === "INFERRED" && edge.approvedInference !== true) {
+        throw new Error(
+          `Inferred edge requires approvedInference: ${edge.source} -> ${edge.target}`,
+        );
+      }
+    } else if (edge.approvedInference !== true) {
+      throw new Error(
+        `Curated edge requires approvedInference: ${edge.source} -> ${edge.target}`,
+      );
+    }
+    const graphifyConfidence =
+      confidence === "EXTRACTED" ? "EXTRACTED" : "INFERRED";
+    return {
+      source: edge.source,
+      target: edge.target,
+      relation: edge.label,
+      confidence: graphifyConfidence,
+      confidence_score: graphifyConfidence === "EXTRACTED" ? 1 : 0.9,
+      review_status:
+        edge.approvedInference === true ? "HUMAN_APPROVED" : "EXTRACTED",
+      source_file: "CURATION_EVIDENCE.json",
+      source_location: `review:edges[${index}]`,
+      weight: 1,
+    };
+  });
+
+  const curatedGraph: GraphDocument & Record<string, unknown> = {
+    directed: false,
+    multigraph: false,
+    graph: { title: review.title, view: "human-reviewed-curation" },
+    nodes: curatedNodes,
+    links: curatedEdges,
+  };
+  const initialShape = graphShape(curatedGraph);
+  if (initialShape.components !== 1 || initialShape.isolated !== 0) {
+    throw new Error(
+      `Curated graph must be connected; components=${initialShape.components} isolated=${initialShape.isolated}`,
+    );
+  }
+
+  const reviewChecksum = sha256(input.review);
+  const output = join(
+    String(status.output_path),
+    "curated",
+    reviewChecksum.slice(0, 12),
+  );
+  mkdirPrivate(output);
+  const graph = join(output, "graph.json");
+  const evidence = join(output, "CURATION_EVIDENCE.json");
+  writeFileSync(graph, `${JSON.stringify(curatedGraph, null, 2)}\n`, {
+    mode: 0o600,
+  });
+  writeFileSync(
+    evidence,
+    `${JSON.stringify(
+      {
+        title: review.title,
+        rawGraphChecksum: status.graph_checksum,
+        reviewChecksum,
+        nodes: review.nodes.map(({ sourceId, id }) => ({ sourceId, id })),
+        edges: review.edges,
+      },
+      null,
+      2,
+    )}\n`,
+    { mode: 0o600 },
+  );
+
+  const graphify = process.env.BOOSTIN_GRAPHIFY_BIN ?? "graphify";
+  const cluster = spawnSync(
+    graphify,
+    ["cluster-only", output, "--graph", graph, "--no-label"],
+    {
+      encoding: "utf8",
+      timeout: 15 * 60 * 1000,
+    },
+  );
+  if (cluster.error || cluster.status !== 0) {
+    const detail = (
+      cluster.stderr ||
+      cluster.stdout ||
+      cluster.error?.message ||
+      ""
+    )
+      .trim()
+      .slice(0, 2000);
+    throw new Error(
+      `Graphify curated view generation failed${detail ? `: ${detail}` : ""}`,
+    );
+  }
+  const graphifyOutput = existsSync(join(output, "graphify-out", "graph.json"))
+    ? join(output, "graphify-out")
+    : output;
+  const generatedGraph = join(graphifyOutput, "graph.json");
+  const html = join(graphifyOutput, "graph.html");
+  const report = join(graphifyOutput, "GRAPH_REPORT.md");
+  for (const required of [generatedGraph, html, report]) {
+    if (!existsSync(required)) {
+      throw new Error(
+        `Graphify did not produce curated ${basename(required)}`,
+      );
+    }
+  }
+  assertGraphHealth(generatedGraph);
+  const shape = graphShape(
+    JSON.parse(readFileSync(generatedGraph, "utf8")) as GraphDocument,
+  );
+  if (shape.components !== 1 || shape.isolated !== 0) {
+    throw new Error(
+      `Graphify disconnected the curated graph; components=${shape.components} isolated=${shape.isolated}`,
+    );
+  }
+  chmodTreePrivate(output);
+  return { graph: generatedGraph, html, report, evidence, ...shape };
 }
 
 function escapeXml(value: string): string {

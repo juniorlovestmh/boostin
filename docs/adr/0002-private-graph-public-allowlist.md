@@ -9,6 +9,11 @@ public-safe files into a private Markdown corpus, then invoke Graphify through a
 local Ollama model. The corpus and all Graphify outputs remain in Boostin's
 private application-support directory.
 
+The raw model output remains an immutable audit artifact. A separate curated
+private view may map real private nodes to reviewed labels and relationships.
+That view must be connected, contain no isolated nodes, reject model
+placeholders, and preserve its evidence mapping beside the generated HTML.
+
 Publishing is a separate operation. A public graph must be generated from a
 human-reviewed allowlist that maps approved private nodes to new public IDs and
 labels. Extracted relationships are eligible. Inferred relationships require
@@ -20,10 +25,11 @@ must not maintain a second schedule.
 
 ## Consequences
 
-The private graph can remain useful and detailed without becoming an accidental
-publishing surface. Public artifacts are smaller, explainable, and auditable.
-The user must review a mapping before export, and graph construction requires a
-local Ollama installation and model.
+The raw private graph can remain honest even when model extraction is sparse.
+The curated private graph provides a navigable explanation without mutating the
+evidence, and public artifacts remain smaller, explainable, and auditable. The
+user must review a mapping before curation or export, and graph construction
+requires a local Ollama installation and model.
 
 Boostin still performs no social-network access, scraping, browser control,
 publishing, messaging, or engagement automation.

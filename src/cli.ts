@@ -16,6 +16,7 @@ import { fingerprintArchive, runDoctor } from "./doctor.js";
 import { requireFileVaultForRealImport } from "./filevault.js";
 import {
   buildProfessionalGraph,
+  curateProfessionalGraph,
   exportPublicGraph,
   graphStatus,
 } from "./graph.js";
@@ -136,6 +137,23 @@ export function createProgram(): Command {
           options.json
             ? `${JSON.stringify(result)}\n`
             : `Graph ${result.id} completed at ${result.output}.\n`,
+        );
+      },
+    );
+  graphCommand
+    .command("curate")
+    .description("Build a connected human-reviewed view of a private graph")
+    .requiredOption("--run <run>")
+    .requiredOption("--review <path>")
+    .option("--json")
+    .action(
+      (options: { run: string; review: string; json?: boolean }) => {
+        requireFileVaultForRealImport();
+        const result = curateProfessionalGraph(options);
+        process.stdout.write(
+          options.json
+            ? `${JSON.stringify(result)}\n`
+            : `Curated graph generated at ${result.html}.\n`,
         );
       },
     );

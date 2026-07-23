@@ -134,7 +134,110 @@ printf '%s' '{"nodes":[{"id":"access","label":"Accessibility","confidence":"EXTR
     });
 
     const allowlist = join(root, "allowlist.json");
+    const curatedReview = join(root, "curated-review.json");
     const publicOut = join(root, "public");
+    writeFileSync(
+      curatedReview,
+      JSON.stringify({
+        title: "A connected professional graph",
+        nodes: [
+          { sourceId: "access", id: "accessibility", label: "Accessibility", kind: "practice" },
+          { sourceId: "revops", id: "revenue-operations", label: "Revenue operations", kind: "career-stage" },
+          { sourceId: "enablement", id: "ai-enablement", label: "AI enablement", kind: "practice" },
+          { sourceId: "agents", id: "agent-systems", label: "Agent systems", kind: "practice" },
+        ],
+        edges: [
+          {
+            source: "accessibility",
+            target: "revenue-operations",
+            label: "informed",
+          },
+          {
+            source: "revenue-operations",
+            target: "ai-enablement",
+            label: "expanded into",
+            approvedInference: true,
+          },
+          {
+            source: "ai-enablement",
+            target: "agent-systems",
+            label: "became infrastructure",
+            approvedInference: true,
+          },
+        ],
+      }),
+      { mode: 0o600 },
+    );
+    const curated = JSON.parse(
+      run(
+        home,
+        [
+          "graph",
+          "curate",
+          "--run",
+          "latest",
+          "--review",
+          curatedReview,
+          "--json",
+        ],
+        { BOOSTIN_GRAPHIFY_BIN: fakeGraphify },
+      ),
+    ) as {
+      graph: string;
+      html: string;
+      report: string;
+      nodes: number;
+      edges: number;
+      components: number;
+      isolated: number;
+    };
+    expect(curated).toMatchObject({
+      nodes: 4,
+      edges: 3,
+      components: 1,
+      isolated: 0,
+    });
+    expect(readFileSync(curated.graph, "utf8")).not.toContain("Human Readable Name");
+    expect(readFileSync(curated.html, "utf8")).toContain("Synthetic graph");
+    expect(statSync(join(built.output, "curated")).mode & 0o777).toBe(0o700);
+    expect(statSync(curated.graph).mode & 0o777).toBe(0o600);
+
+    const disconnectedReview = join(root, "disconnected-review.json");
+    writeFileSync(
+      disconnectedReview,
+      JSON.stringify({
+        title: "Disconnected graph",
+        nodes: [
+          { sourceId: "access", id: "accessibility", label: "Accessibility" },
+          { sourceId: "revops", id: "revenue-operations", label: "Revenue operations" },
+          { sourceId: "agents", id: "agent-systems", label: "Agent systems" },
+        ],
+        edges: [
+          {
+            source: "accessibility",
+            target: "revenue-operations",
+            label: "informed",
+          },
+        ],
+      }),
+      { mode: 0o600 },
+    );
+    expect(() =>
+      run(
+        home,
+        [
+          "graph",
+          "curate",
+          "--run",
+          "latest",
+          "--review",
+          disconnectedReview,
+          "--json",
+        ],
+        { BOOSTIN_GRAPHIFY_BIN: fakeGraphify },
+      ),
+    ).toThrow(/must be connected/);
+
     writeFileSync(
       allowlist,
       JSON.stringify({

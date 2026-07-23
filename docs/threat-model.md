@@ -32,6 +32,9 @@ Graph generation is the one explicit local-service integration. Boostin invokes
 Graphify with the Ollama backend over the local machine only. It does not accept
 cloud API keys for this flow. Public graph export starts from an allowlist and
 does not redact a private graph after the fact.
+Private curation starts from a reviewed mapping, preserves the raw extraction,
+and fails closed on unsupported evidence IDs, model placeholders, ambiguous
+relationships, disconnected components, or isolated nodes.
 
 The optional launchd reminder runs `boostin reminders notify` once per hour. It
 shows only the campaign slug and checkpoint name. It does not open LinkedIn,
