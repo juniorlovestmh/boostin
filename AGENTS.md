@@ -19,6 +19,14 @@ other people's content.
 - Run `pnpm validate` before delivery, then use the repository's no-mistakes
   pipeline.
 
+## Campaign session start
+
+At the beginning of Boostin content, analytics, or campaign work, run
+`pnpm exec tsx src/cli.ts due --json` as a read-only check. Surface overdue
+checkpoints in the handoff, but never mark one complete without the matching
+first-party analytics capture. Boostin owns the schedule; do not copy it into a
+second Firstmate state file.
+
 ## Agent skills
 
 ### Issue tracker

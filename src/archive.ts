@@ -15,6 +15,11 @@ export interface ReadArchiveResult {
   fingerprint: string;
 }
 
+export type ArchiveEntrySelector = (
+  basename: string,
+  fullName: string,
+) => boolean;
+
 function validateEntry(entry: Entry): void {
   const name = entry.fileName;
   const parts = name.split("/");
@@ -88,9 +93,9 @@ function readEntry(zip: ZipFile, entry: Entry): Promise<Buffer> {
   });
 }
 
-export async function readAllowedArchive(
+export async function readSelectedArchive(
   path: string,
-  allowedNames: ReadonlySet<string>,
+  select: ArchiveEntrySelector,
 ): Promise<ReadArchiveResult> {
   const size = statSync(path).size;
   if (size > MAX_ZIP_BYTES) throw new Error("Archive exceeds 500 MB");
@@ -124,7 +129,7 @@ export async function readAllowedArchive(
             `${entry.fileName}:${entry.uncompressedSize}:${entry.crc32}`,
           );
           const name = basename(entry.fileName);
-          if (allowedNames.has(name) && !entry.fileName.endsWith("/")) {
+          if (select(name, entry.fileName) && !entry.fileName.endsWith("/")) {
             if (entries.has(name)) throw new Error(`Duplicate archive entry: ${name}`);
             entries.set(name, await readEntry(zip, entry));
           }
@@ -144,4 +149,11 @@ export async function readAllowedArchive(
       .update(structure.sort().join("\n"))
       .digest("hex"),
   };
+}
+
+export async function readAllowedArchive(
+  path: string,
+  allowedNames: ReadonlySet<string>,
+): Promise<ReadArchiveResult> {
+  return await readSelectedArchive(path, (name) => allowedNames.has(name));
 }
