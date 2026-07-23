@@ -92,6 +92,24 @@ no additional model download.
 Additional source files must be explicit Markdown, MDX, or text files. Boostin
 never scans Downloads, repositories, messages, connections, or browser data.
 
+A raw local-model extraction is evidence, not a finished narrative. Small local
+models can leave singleton nodes, duplicate labels, or literal placeholder
+labels. Preserve that raw output, then create a separate connected view from a
+review file:
+
+```sh
+node dist/cli.js graph curate \
+  --run latest \
+  --review ~/Library/Application\ Support/Boostin/curated-graph-review.json
+```
+
+The review uses the same node and edge shape as the public allowlist. Every
+curated node must map to a real private node. Relationships absent from the raw
+graph require `approvedInference: true`; ambiguous raw relationships are
+rejected. Boostin also rejects placeholder labels, duplicate source mappings,
+disconnected components, and isolated nodes. The raw Graphify output is never
+overwritten.
+
 A public graph is a separate allowlisted product. It requires a reviewed JSON
 allowlist whose nodes map to the private graph. Extracted edges are accepted;
 inferred edges require `approvedInference: true`; ambiguous edges are rejected.
