@@ -147,12 +147,139 @@ describe("post archive import", () => {
       imported: 1,
       skipped: false,
       profileId: "https://social.example/profiles/synthetic-user",
+      adapter: "linkedin-legacy",
     });
     expect(second).toEqual({
       imported: 0,
       skipped: true,
       profileId: "https://social.example/profiles/synthetic-user",
+      adapter: "linkedin-legacy",
     });
+  });
+
+  test("imports the July 2026 suffixed archive schema", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-posts-2026-"));
+    const home = join(root, "home");
+    const archive = join(root, "linkedin.zip");
+    await createZip(archive, {
+      "Profile.csv":
+        "First Name,Last Name,Maiden Name,Address,Birth Date,Headline,Summary,Industry,Zip Code,Geo Location,Twitter Handles,Websites,Instant Messengers\nSynthetic,User,,,,Synthetic headline,,,,,,,\n",
+      "Shares_123456789.csv":
+        "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-07-20 10:00:00,https://social.example/posts/1,AI agents need approval boundaries.,https://example.test/article,,PUBLIC\n",
+    });
+
+    const result = JSON.parse(
+      run(home, ["import", "posts", archive, "--json"]),
+    ) as { imported: number; skipped: boolean; profileId: string; adapter: string };
+
+    expect(result).toEqual({
+      imported: 1,
+      skipped: false,
+      profileId: "linkedin-member:123456789",
+      adapter: "linkedin-2026",
+    });
+    const database = new Database(join(home, "boostin.db"), { readonly: true });
+    try {
+      expect(database.pragma("user_version", { simple: true })).toBe(2);
+      expect(
+        database
+          .prepare("SELECT source_kind FROM posts WHERE url = ?")
+          .pluck()
+          .get("https://social.example/posts/1"),
+      ).toBe("archive");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("registers a current post and reconciles it with a later archive by URL", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-post-reconcile-"));
+    const home = join(root, "home");
+    const firstArchive = join(root, "first.zip");
+    const nextArchive = join(root, "next.zip");
+    const bodyFile = join(root, "post.md");
+    const profile =
+      "First Name,Last Name,Public Profile URL\nSynthetic,User,https://social.example/profiles/synthetic-user\n";
+    await createZip(firstArchive, {
+      "Profile.csv": profile,
+      "Shares.csv":
+        "Date,ShareLink,ShareCommentary,Visibility\n2026-07-20 10:00:00,https://social.example/posts/1,Archived post,PUBLIC\n",
+    });
+    writeFileSync(bodyFile, "Current agent-harness contribution.", {
+      mode: 0o600,
+    });
+    run(home, ["import", "posts", firstArchive, "--json"]);
+    const manual = JSON.parse(
+      run(home, [
+        "post",
+        "add",
+        "--url",
+        "https://social.example/posts/2",
+        "--published-at",
+        "2026-07-22T10:00:00.000Z",
+        "--body-file",
+        bodyFile,
+        "--source",
+        "manual",
+        "--json",
+      ]),
+    ) as { id: string; source: string };
+    expect(manual.source).toBe("manual");
+
+    await createZip(nextArchive, {
+      "Profile.csv": profile,
+      "Shares.csv":
+        "Date,ShareLink,ShareCommentary,Visibility\n2026-07-20 10:00:00,https://social.example/posts/1,Archived post,PUBLIC\n2026-07-22 10:00:00,https://social.example/posts/2,Current agent-harness contribution.,PUBLIC\n",
+    });
+    run(home, ["import", "posts", nextArchive, "--json"]);
+
+    const database = new Database(join(home, "boostin.db"), { readonly: true });
+    try {
+      const posts = database
+        .prepare("SELECT id, url, source_kind, deleted_at FROM posts ORDER BY url")
+        .all() as Array<{
+        id: string;
+        url: string;
+        source_kind: string;
+        deleted_at: string | null;
+      }>;
+      expect(posts).toHaveLength(2);
+      expect(posts[1]).toMatchObject({
+        id: manual.id,
+        url: "https://social.example/posts/2",
+        source_kind: "archive",
+        deleted_at: null,
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("rejects ambiguous and unknown archive schemas", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-post-schema-"));
+    const home = join(root, "home");
+    const ambiguous = join(root, "ambiguous.zip");
+    const unknown = join(root, "unknown.zip");
+    await createZip(ambiguous, {
+      "Profile.csv":
+        "First Name,Last Name,Public Profile URL\nSynthetic,User,https://social.example/profiles/synthetic-user\n",
+      "Shares_123.csv":
+        "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-07-20,https://social.example/posts/1,One,,,PUBLIC\n",
+      "Shares_456.csv":
+        "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-07-20,https://social.example/posts/2,Two,,,PUBLIC\n",
+    });
+    await createZip(unknown, {
+      "Profile.csv":
+        "First Name,Last Name,Public Profile URL\nSynthetic,User,https://social.example/profiles/synthetic-user\n",
+      "Shares.csv": "When,Link,Text\n2026-07-20,https://social.example/posts/1,One\n",
+    });
+
+    expect(() => run(home, ["import", "posts", ambiguous, "--json"])).toThrow(
+      /exactly one recognized Shares file/,
+    );
+    expect(() => run(home, ["import", "posts", unknown, "--json"])).toThrow(
+      /schema mismatch/,
+    );
   });
 
   test("rejects a different profile and tombstones posts absent from a newer archive", async () => {
@@ -192,7 +319,7 @@ describe("post archive import", () => {
         .all() as { url: string; deleted_at: string | null }[];
       expect(posts[0]?.deleted_at).not.toBeNull();
       expect(posts[1]?.deleted_at).toBeNull();
-      expect(database.pragma("user_version", { simple: true })).toBe(1);
+      expect(database.pragma("user_version", { simple: true })).toBe(2);
     } finally {
       database.close();
     }

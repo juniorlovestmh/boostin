@@ -49,12 +49,97 @@ node dist/cli.js import analytics ~/Downloads/analytics.xlsx \
 node dist/cli.js report weekly --private --week 2026-07-20
 ```
 
+LinkedIn archive formats drift. Boostin currently recognizes both the legacy
+`Shares.csv` export and the July 2026 `Shares_<member-id>.csv` export. A post
+that is newer than the latest account archive can be registered from a local
+Markdown file and will be reconciled by URL during a later archive import:
+
+```sh
+node dist/cli.js post add \
+  --url https://www.linkedin.com/posts/example \
+  --published-at 2026-07-22T12:00:00-03:00 \
+  --body-file ./post.md \
+  --source manual
+```
+
 Public reports require explicit confirmation and contain aggregate allowlisted
 fields only:
 
 ```sh
 node dist/cli.js report weekly --public --confirm-public --week 2026-07-20
 ```
+
+## Professional graph
+
+Boostin can generate a private professional-content corpus and invoke Graphify
+through a local Ollama model. The corpus, raw graph, report, and interactive
+HTML remain under Boostin's private application-support directory.
+
+```sh
+uv tool install "graphifyy[ollama]"
+ollama pull llama3.2:latest
+node dist/cli.js graph build \
+  --corpus professional \
+  --source ./public-project-summary.md
+node dist/cli.js graph status --json
+```
+
+Boostin creates a local `boostin-graphify:latest` Ollama profile from the
+already-installed `llama3.2:latest` weights. The profile adds an 8K context and
+a hard 2,048-token prediction cap so Graphify receives bounded JSON instead of
+an unbounded continuation. This reuses the existing model layers and performs
+no additional model download.
+
+Additional source files must be explicit Markdown, MDX, or text files. Boostin
+never scans Downloads, repositories, messages, connections, or browser data.
+
+A public graph is a separate allowlisted product. It requires a reviewed JSON
+allowlist whose nodes map to the private graph. Extracted edges are accepted;
+inferred edges require `approvedInference: true`; ambiguous edges are rejected.
+The exported manifest contains no private node IDs, source prose, URLs, profile
+identifiers, or local paths.
+
+```sh
+node dist/cli.js graph export-public \
+  --run latest \
+  --allowlist ~/Library/Application\ Support/Boostin/public-graph-allowlist.json \
+  --out ./public-graph
+```
+
+## Campaign checkpoints
+
+Campaigns schedule measurement checkpoints without logging into a social
+network or automating engagement:
+
+```sh
+node dist/cli.js campaign start \
+  --slug linkedin-career-graph \
+  --article-url https://appheat.co/posts/linkedin-career-graph/ \
+  --post-url https://www.linkedin.com/posts/example \
+  --published-at 2026-07-23T12:00:00-03:00
+
+node dist/cli.js due --json
+node dist/cli.js reminders install
+```
+
+The four checkpoints are 24 hours, 72 hours, 7 days, and 30 days after
+publication. Place an official archive or analytics workbook only in
+`~/Library/Application Support/Boostin/inbox/`, then process it explicitly:
+
+```sh
+node dist/cli.js inbox process \
+  --captured-at 2026-07-24T12:00:00-03:00
+node dist/cli.js checkpoint complete \
+  --campaign linkedin-career-graph \
+  --name 24h \
+  --captured-at 2026-07-24T12:00:00-03:00
+node dist/cli.js report campaign \
+  --slug linkedin-career-graph \
+  --private
+```
+
+`boostin due --json` is the stable read-only interface for Firstmate or another
+local supervisor. Boostin remains the only owner of the schedule.
 
 Create a portable authenticated backup without putting the passphrase in shell
 history:
