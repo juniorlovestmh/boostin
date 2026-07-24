@@ -180,7 +180,7 @@ describe("post archive import", () => {
     });
     const database = new Database(join(home, "boostin.db"), { readonly: true });
     try {
-      expect(database.pragma("user_version", { simple: true })).toBe(2);
+      expect(database.pragma("user_version", { simple: true })).toBe(3);
       expect(
         database
           .prepare("SELECT source_kind FROM posts WHERE url = ?")
@@ -319,7 +319,7 @@ describe("post archive import", () => {
         .all() as { url: string; deleted_at: string | null }[];
       expect(posts[0]?.deleted_at).not.toBeNull();
       expect(posts[1]?.deleted_at).toBeNull();
-      expect(database.pragma("user_version", { simple: true })).toBe(2);
+      expect(database.pragma("user_version", { simple: true })).toBe(3);
     } finally {
       database.close();
     }
