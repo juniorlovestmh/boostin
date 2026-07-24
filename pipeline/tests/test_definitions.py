@@ -12,6 +12,7 @@ from boostin_pipeline.defs.assets import (
     bronze_graph_valid,
     gold_graph,
     gold_graph_valid,
+    resolve_silver,
     silver_graph,
     silver_graph_valid,
 )
@@ -360,6 +361,26 @@ def test_review_resolve_decision_rejects_placeholder_label(
 
     with pytest.raises(ValueError, match="requires a unique ID"):
         dg.materialize(assets=[bronze_graph, silver_graph, gold_graph])
+
+
+def test_long_labels_get_distinct_deterministic_canonical_ids() -> None:
+    prefix = "A" * 110
+    bronze = {
+        "nodes": [
+            {"id": "first", "label": f"{prefix} First"},
+            {"id": "second", "label": f"{prefix} Second"},
+        ],
+        "edges": [],
+    }
+
+    first = resolve_silver(bronze)["silver_nodes"]
+    second = resolve_silver(bronze)["silver_nodes"]
+    first_ids = [node["canonical_id"] for node in first]
+    second_ids = [node["canonical_id"] for node in second]
+
+    assert first_ids == second_ids
+    assert len(set(first_ids)) == 2
+    assert all(len(canonical_id) == 100 for canonical_id in first_ids)
 
 
 def test_bronze_rejects_dangling_edges(
