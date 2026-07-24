@@ -18,9 +18,14 @@
     "check": "tsc --noEmit && eslint .",
     "check:public": "node scripts/check-public-repo.mjs",
     "fixtures:generate": "tsx scripts/generate-synthetic-fixtures.ts",
+    "pipeline:check": "sh pipeline/scripts/dagster.sh check",
+    "pipeline:dev": "sh pipeline/scripts/dagster.sh dev",
+    "pipeline:materialize": "sh pipeline/scripts/dagster.sh materialize",
+    "pipeline:test": "sh pipeline/scripts/dagster.sh test",
+    "pipeline:validate": "pnpm pipeline:check && pnpm pipeline:test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "validate": "pnpm check:public && pnpm check && pnpm test && pnpm build"
+    "validate": "pnpm check:public && pnpm check && pnpm test && pnpm build && pnpm pipeline:validate"
   },
   "engines": {
     "node": ">=22"
