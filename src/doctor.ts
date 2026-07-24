@@ -4,7 +4,7 @@ import { extname } from "node:path";
 
 import { parse } from "csv-parse/sync";
 
-import { readAllowedArchive } from "./archive.js";
+import { readSelectedArchive } from "./archive.js";
 import { getDatabasePath } from "./database.js";
 import { getFileVaultStatus } from "./filevault.js";
 import { readFirstWorksheet } from "./xlsx.js";
@@ -21,10 +21,30 @@ const ANALYTICS_FIELDS = new Set([
   "Out-of-network %",
 ]);
 
-const ARCHIVE_FIELDS: Record<string, ReadonlySet<string>> = {
-  "Profile.csv": new Set(["First Name", "Last Name", "Public Profile URL"]),
-  "Shares.csv": new Set(["Date", "ShareLink", "ShareCommentary", "Visibility"]),
-};
+const PROFILE_FIELDS = new Set([
+  "First Name",
+  "Last Name",
+  "Public Profile URL",
+  "Maiden Name",
+  "Address",
+  "Birth Date",
+  "Headline",
+  "Summary",
+  "Industry",
+  "Zip Code",
+  "Geo Location",
+  "Twitter Handles",
+  "Websites",
+  "Instant Messengers",
+]);
+const SHARE_FIELDS = new Set([
+  "Date",
+  "ShareLink",
+  "ShareCommentary",
+  "SharedUrl",
+  "MediaUrl",
+  "Visibility",
+]);
 
 export interface DoctorResult {
   fileVault: string;
@@ -66,20 +86,24 @@ export async function fingerprintArchive(path: string): Promise<Record<string, u
       sheets: [{ name: "sheet1", recognizedFields, ...dimensions }],
     };
   }
-  const archive = await readAllowedArchive(
+  const archive = await readSelectedArchive(
     path,
-    new Set(["Profile.csv", "Shares.csv"]),
+    (name) =>
+      name === "Profile.csv" || /^Shares(?:_[0-9]+)?\.csv$/.test(name),
   );
   const files = [...archive.entries.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, buffer]) => {
       const rows = parse(buffer, { bom: true, skip_empty_lines: true }) as string[][];
       const header = rows[0] ?? [];
+      const fields = name === "Profile.csv" ? PROFILE_FIELDS : SHARE_FIELDS;
       const recognizedColumns = [
-        ...new Set(rows.flat().filter((cell) => ARCHIVE_FIELDS[name]?.has(cell))),
+        ...new Set(rows.flat().filter((cell) => fields.has(cell))),
       ].sort();
       return {
-        name,
+        name: /^Shares_[0-9]+\.csv$/.test(name)
+          ? "Shares_<member-id>.csv"
+          : name,
         recognizedColumns,
         columnCount: header.length,
         rowCount: Math.max(0, rows.length - 1),

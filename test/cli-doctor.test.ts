@@ -57,6 +57,31 @@ describe("doctor", () => {
     expect(fingerprint).not.toContain("9876");
   });
 
+  test("recognizes the July 2026 suffixed archive without exposing member values", async () => {
+    const root = mkdtempSync(join(tmpdir(), "boostin-doctor-2026-"));
+    const home = join(root, "home");
+    const archive = join(root, "current.zip");
+    await createZip(archive, {
+      "Profile.csv":
+        "First Name,Last Name,Maiden Name,Address,Birth Date,Headline,Summary,Industry,Zip Code,Geo Location,Twitter Handles,Websites,Instant Messengers\nSecret,Person,,,,Private headline,,,,,,,\n",
+      "Shares_123456789.csv":
+        "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-07-20,https://example.invalid/private,Private prose,,,PUBLIC\n",
+    });
+
+    const fingerprint = run(home, [
+      "doctor",
+      "--fingerprint",
+      archive,
+      "--json",
+    ]);
+    expect(fingerprint).toContain("Shares_<member-id>.csv");
+    expect(fingerprint).toContain("SharedUrl");
+    expect(fingerprint).not.toContain("123456789");
+    expect(fingerprint).not.toContain("Private headline");
+    expect(fingerprint).not.toContain("Private prose");
+    expect(fingerprint).not.toContain("example.invalid");
+  });
+
   test("never emits arbitrary cells when a workbook is transposed or malformed", async () => {
     const root = mkdtempSync(join(tmpdir(), "boostin-doctor-transposed-"));
     const home = join(root, "home");

@@ -18,7 +18,7 @@ database, or private report to a public issue.
 
 ## Requirements
 
-- macOS with FileVault enabled for real data
+- macOS with FileVault enabled for imports, snapshots, drafts, and outcomes
 - Node.js 22 or newer
 - pnpm
 
@@ -36,7 +36,8 @@ workflow.
 
 ## Quick start
 
-Real imports are intentionally blocked until FileVault is enabled:
+Import, snapshot, draft, and outcome commands are intentionally blocked until
+FileVault is enabled:
 
 ```sh
 pnpm build
@@ -48,12 +49,89 @@ node dist/cli.js import analytics ~/Downloads/analytics.xlsx \
 node dist/cli.js report weekly --private --week 2026-07-20
 ```
 
+LinkedIn archive formats drift. Boostin currently recognizes both the legacy
+`Shares.csv` export and the July 2026 `Shares_<member-id>.csv` export. A post
+that is newer than the latest account archive can be registered from a local
+Markdown file and will be reconciled by URL during a later archive import:
+
+```sh
+node dist/cli.js post add \
+  --url https://www.linkedin.com/posts/example \
+  --published-at 2026-07-22T12:00:00-03:00 \
+  --body-file ./post.md \
+  --source manual
+```
+
 Public reports require explicit confirmation and contain aggregate allowlisted
 fields only:
 
 ```sh
 node dist/cli.js report weekly --public --confirm-public --week 2026-07-20
 ```
+
+## Professional graph
+
+Boostin can generate a private professional-content corpus and invoke Graphify
+through a local Ollama model. The corpus, raw graph, report, and interactive
+HTML remain under Boostin's private application-support directory.
+
+```sh
+uv tool install "graphifyy[ollama]"
+ollama pull llama3.2:latest
+node dist/cli.js graph build \
+  --corpus professional \
+  --source ./public-project-summary.md
+node dist/cli.js graph status --json
+```
+
+Boostin creates a local `boostin-graphify:latest` Ollama profile from the
+already-installed `llama3.2:latest` weights. The profile adds an 8K context and
+a hard 2,048-token prediction cap so Graphify receives bounded JSON instead of
+an unbounded continuation. This reuses the existing model layers and performs
+no additional model download.
+
+Additional source files must be explicit Markdown, MDX, or text files. Boostin
+never scans Downloads, repositories, messages, connections, or browser data.
+
+A raw local-model extraction is evidence, not a finished narrative. Small local
+models can leave singleton nodes, duplicate labels, or literal placeholder
+labels. Preserve that raw output, then create a separate connected view from a
+review file:
+
+```sh
+node dist/cli.js graph curate \
+  --run latest \
+  --review ~/Library/Application\ Support/Boostin/curated-graph-review.json
+```
+
+The review uses the same node and edge shape as the public allowlist. Every
+curated node must map to a real private node. Relationships absent from the raw
+graph require `approvedInference: true`; ambiguous raw relationships are
+rejected. Boostin also rejects placeholder labels, duplicate source mappings,
+disconnected components, and isolated nodes. The raw Graphify output is never
+overwritten.
+
+A public graph is a separate allowlisted product. It requires a reviewed JSON
+allowlist whose nodes map to the private graph. Extracted edges are accepted;
+inferred edges require `approvedInference: true`; ambiguous edges are rejected.
+The exported manifest contains no private node IDs, source prose, URLs, profile
+identifiers, or local paths.
+
+```sh
+node dist/cli.js graph export-public \
+  --run latest \
+  --allowlist ~/Library/Application\ Support/Boostin/public-graph-allowlist.json \
+  --out ./public-graph
+```
+
+## Campaign checkpoints
+
+Campaigns schedule measurement without logging into a social network or
+automating engagement. The complete campaign launch, checkpoint, and reporting
+workflow is maintained in the [LinkedIn career graph launch guide](docs/linkedin-career-graph-launch.md).
+
+`boostin due --json` is the stable read-only interface for Firstmate or another
+local supervisor. Boostin remains the only owner of the schedule.
 
 Create a portable authenticated backup without putting the passphrase in shell
 history:

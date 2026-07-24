@@ -3,11 +3,27 @@ import { Command } from "commander";
 import { readFileSync } from "node:fs";
 
 import { createBackup, restoreBackup } from "./backup.js";
+import {
+  campaignReport,
+  completeCheckpoint,
+  dueCheckpoints,
+  installReminders,
+  notifyDueCheckpoints,
+  startCampaign,
+} from "./campaign.js";
 import { openDatabase } from "./database.js";
 import { fingerprintArchive, runDoctor } from "./doctor.js";
 import { requireFileVaultForRealImport } from "./filevault.js";
+import {
+  buildProfessionalGraph,
+  curateProfessionalGraph,
+  exportPublicGraph,
+  graphStatus,
+} from "./graph.js";
 import { importAnalytics } from "./import-analytics.js";
 import { importPosts } from "./import-posts.js";
+import { processInbox } from "./inbox.js";
+import { addPost } from "./posts.js";
 import { generateWeeklyReport } from "./report.js";
 import {
   addOutcome,
@@ -72,6 +88,227 @@ export function createProgram(): Command {
       );
     });
 
+  const postCommand = program.command("post");
+  postCommand
+    .command("add")
+    .description("Register one current post before it appears in the next archive")
+    .requiredOption("--url <url>")
+    .requiredOption("--published-at <date>")
+    .requiredOption("--body-file <path>")
+    .requiredOption("--source <source>")
+    .option("--json")
+    .action(
+      (options: {
+        url: string;
+        publishedAt: string;
+        bodyFile: string;
+        source: string;
+        json?: boolean;
+      }) => {
+        requireFileVaultForRealImport();
+        const result = addPost(options);
+        process.stdout.write(
+          options.json
+            ? `${JSON.stringify(result)}\n`
+            : `Post ${result.id} registered${result.skipped ? " (already present)" : ""}.\n`,
+        );
+      },
+    );
+
+  const graphCommand = program.command("graph");
+  graphCommand
+    .command("build")
+    .description("Build a private professional graph with local Graphify and Ollama")
+    .requiredOption("--corpus <name>")
+    .option("--source <paths...>", "Additional public-safe local source files")
+    .option("--json")
+    .action(
+      (options: {
+        corpus: string;
+        source?: string[];
+        json?: boolean;
+      }) => {
+        requireFileVaultForRealImport();
+        const result = buildProfessionalGraph({
+          corpus: options.corpus,
+          sources: options.source ?? [],
+        });
+        process.stdout.write(
+          options.json
+            ? `${JSON.stringify(result)}\n`
+            : `Graph ${result.id} completed at ${result.output}.\n`,
+        );
+      },
+    );
+  graphCommand
+    .command("curate")
+    .description("Build a connected human-reviewed view of a private graph")
+    .requiredOption("--run <run>")
+    .requiredOption("--review <path>")
+    .option("--json")
+    .action(
+      (options: { run: string; review: string; json?: boolean }) => {
+        requireFileVaultForRealImport();
+        const result = curateProfessionalGraph(options);
+        process.stdout.write(
+          options.json
+            ? `${JSON.stringify(result)}\n`
+            : `Curated graph generated at ${result.html}.\n`,
+        );
+      },
+    );
+  graphCommand
+    .command("status")
+    .option("--json")
+    .action((options: { json?: boolean }) => {
+      requireFileVaultForRealImport();
+      const result = graphStatus();
+      process.stdout.write(
+        options.json
+          ? `${JSON.stringify(result)}\n`
+          : `${result.status}: ${result.id}\n`,
+      );
+    });
+  graphCommand
+    .command("export-public")
+    .description("Export a reviewed allowlist without private graph content")
+    .requiredOption("--run <run>")
+    .requiredOption("--allowlist <path>")
+    .requiredOption("--out <path>")
+    .option("--json")
+    .action(
+      (options: {
+        run: string;
+        allowlist: string;
+        out: string;
+        json?: boolean;
+      }) => {
+        requireFileVaultForRealImport();
+        const result = exportPublicGraph(options);
+        process.stdout.write(
+          options.json
+            ? `${JSON.stringify(result)}\n`
+            : `Public graph exported to ${result.svg}.\n`,
+        );
+      },
+    );
+
+  const campaignCommand = program.command("campaign");
+  campaignCommand
+    .command("start")
+    .requiredOption("--slug <slug>")
+    .requiredOption("--article-url <url>")
+    .requiredOption("--post-url <url>")
+    .requiredOption("--published-at <date>")
+    .option("--timezone <timezone>", "IANA timezone", "America/Sao_Paulo")
+    .option("--json")
+    .action(
+      (options: {
+        slug: string;
+        articleUrl: string;
+        postUrl: string;
+        publishedAt: string;
+        timezone?: string;
+        json?: boolean;
+      }) => {
+        requireFileVaultForRealImport();
+        const result = startCampaign(options);
+        process.stdout.write(
+          options.json
+            ? `${JSON.stringify(result)}\n`
+            : `Campaign ${result.slug} scheduled with ${result.checkpoints.length} checkpoints.\n`,
+        );
+      },
+    );
+
+  program
+    .command("due")
+    .description("List overdue campaign checkpoints")
+    .option("--json")
+    .action((options: { json?: boolean }) => {
+      const result = dueCheckpoints();
+      process.stdout.write(
+        options.json
+          ? `${JSON.stringify(result)}\n`
+          : result.length === 0
+            ? "No checkpoints are due.\n"
+            : `${result
+                .map(
+                  (item) =>
+                    `${item.campaign}/${item.checkpoint} due ${item.dueAt}`,
+                )
+                .join("\n")}\n`,
+      );
+    });
+
+  const checkpointCommand = program.command("checkpoint");
+  checkpointCommand
+    .command("complete")
+    .requiredOption("--campaign <slug>")
+    .requiredOption("--name <name>")
+    .requiredOption("--captured-at <date>")
+    .option("--json")
+    .action(
+      (options: {
+        campaign: string;
+        name: string;
+        capturedAt: string;
+        json?: boolean;
+      }) => {
+        requireFileVaultForRealImport();
+        const result = completeCheckpoint(options);
+        process.stdout.write(
+          options.json
+            ? `${JSON.stringify(result)}\n`
+            : `${result.campaign}/${result.checkpoint} completed.\n`,
+        );
+      },
+    );
+
+  const remindersCommand = program.command("reminders");
+  remindersCommand
+    .command("install")
+    .option("--json")
+    .action((options: { json?: boolean }) => {
+      requireFileVaultForRealImport();
+      const result = installReminders();
+      process.stdout.write(
+        options.json
+          ? `${JSON.stringify(result)}\n`
+          : `Reminders installed at ${result.plist}.\n`,
+      );
+    });
+  remindersCommand
+    .command("notify")
+    .option("--json")
+    .action((options: { json?: boolean }) => {
+      requireFileVaultForRealImport();
+      const result = notifyDueCheckpoints();
+      process.stdout.write(
+        options.json
+          ? `${JSON.stringify(result)}\n`
+          : `${result.notified} reminder notifications sent.\n`,
+      );
+    });
+
+  const inboxCommand = program.command("inbox");
+  inboxCommand
+    .command("process")
+    .description("Import recognized files placed explicitly in the Boostin inbox")
+    .option("--captured-at <date>", "Capture time required for analytics workbooks")
+    .option("--json")
+    .action(
+      async (options: { capturedAt?: string; json?: boolean }) => {
+        requireFileVaultForRealImport();
+        const result = await processInbox(options);
+        process.stdout.write(
+          options.json
+            ? `${JSON.stringify(result)}\n`
+            : `Processed ${result.processed} inbox files.\n`,
+        );
+      },
+    );
+
   const reportCommand = program.command("report");
   reportCommand
     .command("weekly")
@@ -100,6 +337,20 @@ export function createProgram(): Command {
         if (!options.out) process.stdout.write(report);
       },
     );
+  reportCommand
+    .command("campaign")
+    .requiredOption("--slug <slug>")
+    .requiredOption("--private", "Generate a private campaign report")
+    .option("--out <path>")
+    .action((options: { slug: string; private: boolean; out?: string }) => {
+      requireFileVaultForRealImport();
+      if (!options.private) throw new Error("Campaign reports are private-only");
+      const report = campaignReport({
+        slug: options.slug,
+        ...(options.out ? { out: options.out } : {}),
+      });
+      if (!options.out) process.stdout.write(report);
+    });
 
   const snapshotCommand = program.command("snapshot");
   snapshotCommand
@@ -157,6 +408,7 @@ export function createProgram(): Command {
   outcomeCommand
     .command("add")
     .requiredOption("--occurred-at <date>")
+    .option("--campaign <slug>")
     .requiredOption("--type <type>")
     .requiredOption("--count <count>")
     .option("--note <note>")
@@ -164,6 +416,7 @@ export function createProgram(): Command {
     .action(
       (options: {
         occurredAt: string;
+        campaign?: string;
         type: string;
         count: string;
         note?: string;

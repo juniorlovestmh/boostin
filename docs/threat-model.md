@@ -6,6 +6,8 @@
 - A user's own post history and aggregate analytics
 - Self-reported professional outcomes
 - Portable database backups
+- Private Graphify corpora, raw graphs, reports, and interactive HTML
+- Campaign URLs, schedules, checkpoints, and private reports
 
 ## Defended against
 
@@ -23,5 +25,17 @@
 - Weak, reused, disclosed, or forgotten backup passphrases
 
 Core commands make no network calls and emit no telemetry. The database lives
-outside project workspaces and uses mode 0600. Real imports fail closed while
-FileVault is unavailable.
+outside project workspaces and uses mode 0600. Import, snapshot, draft, and
+outcome commands fail closed while FileVault is unavailable.
+
+Graph generation is the one explicit local-service integration. Boostin invokes
+Graphify with the Ollama backend over the local machine only. It does not accept
+cloud API keys for this flow. Public graph export starts from an allowlist and
+does not redact a private graph after the fact.
+Private curation starts from a reviewed mapping, preserves the raw extraction,
+and fails closed on unsupported evidence IDs, model placeholders, ambiguous
+relationships, disconnected components, or isolated nodes.
+
+The optional launchd reminder runs `boostin reminders notify` once per hour. It
+shows only the campaign slug and checkpoint name. It does not open LinkedIn,
+download files, publish content, or send engagement.

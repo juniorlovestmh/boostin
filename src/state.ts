@@ -86,6 +86,7 @@ export function listDrafts(): Array<Record<string, unknown>> {
 }
 
 export function addOutcome(input: {
+  campaign?: string;
   occurredAt: string;
   type: string;
   count: string;
@@ -97,9 +98,13 @@ export function addOutcome(input: {
   const id = randomUUID();
   const { database } = openDatabase();
   try {
+    const campaignId = input.campaign
+      ? (database.prepare("SELECT id FROM campaigns WHERE slug = ?").get(input.campaign) as { id: string } | undefined)?.id
+      : null;
+    if (input.campaign && !campaignId) throw new Error(`Unknown campaign: ${input.campaign}`);
     database
-      .prepare("INSERT INTO outcomes (id, occurred_at, type, count, note) VALUES (?, ?, ?, ?, ?)")
-      .run(id, input.occurredAt, input.type, count, input.note ?? null);
+      .prepare("INSERT INTO outcomes (id, campaign_id, occurred_at, type, count, note) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(id, campaignId ?? null, input.occurredAt, input.type, count, input.note ?? null);
     return { id, count };
   } finally {
     database.close();
