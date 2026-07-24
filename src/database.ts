@@ -159,7 +159,6 @@ function migrate(database: Database.Database, path: string, created: boolean): D
       reopened.exec(`
         ALTER TABLE posts ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'archive';
         ALTER TABLE posts ADD COLUMN source_ref TEXT;
-        ALTER TABLE outcomes ADD COLUMN campaign_id TEXT REFERENCES campaigns(id);
       `);
       createCurrentSchema(reopened);
       reopened.pragma("user_version = 3");
