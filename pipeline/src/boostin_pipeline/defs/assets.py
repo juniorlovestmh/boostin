@@ -52,7 +52,7 @@ def _derived_database_path() -> Path:
         path.relative_to(root)
     except ValueError as error:
         raise ValueError("derived pipeline database must remain under the pipeline directory") from error
-    if path.exists() and path.is_symlink():
+    if path.is_symlink():
         raise ValueError("refusing symbolic link for derived pipeline database")
     if path.parent.exists() and path.parent.resolve() != path.parent:
         raise ValueError("refusing symbolic link in derived pipeline database path")
