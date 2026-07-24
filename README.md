@@ -18,7 +18,7 @@ database, or private report to a public issue.
 
 ## Requirements
 
-- macOS with FileVault enabled for real data
+- macOS with FileVault enabled for imports, snapshots, drafts, and outcomes
 - Node.js 22 or newer
 - pnpm
 
@@ -36,7 +36,8 @@ workflow.
 
 ## Quick start
 
-Real imports are intentionally blocked until FileVault is enabled:
+Import, snapshot, draft, and outcome commands are intentionally blocked until
+FileVault is enabled:
 
 ```sh
 pnpm build
