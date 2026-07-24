@@ -139,11 +139,16 @@ export function completeCheckpoint(input: {
         SELECT 1
         FROM analytics_snapshots a
         JOIN posts p ON p.id = a.post_id
-        WHERE p.url = (SELECT post_url FROM campaigns WHERE slug = ?)
+        JOIN checkpoints cp ON cp.campaign_id = (
+          SELECT id FROM campaigns WHERE slug = ?
+        ) AND cp.name = ?
+        JOIN campaigns c ON c.id = cp.campaign_id
+        WHERE p.url = c.post_url
           AND a.captured_at IN (?, ?)
+          AND ? >= cp.due_at
         LIMIT 1
       `)
-      .get(input.campaign, input.capturedAt, capturedAt);
+      .get(input.campaign, input.name, input.capturedAt, capturedAt, capturedAt);
     if (!evidence) {
       throw new Error(
         `No imported analytics snapshot for ${input.campaign}/${input.name} at ${capturedAt}`,
