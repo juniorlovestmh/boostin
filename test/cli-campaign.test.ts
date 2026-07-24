@@ -8,6 +8,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
 
 function run(
@@ -72,6 +73,31 @@ describe("campaign workflow", () => {
         overdue: true,
       }),
     ]);
+
+    const database = new Database(join(home, "boostin.db"));
+    database
+      .prepare(
+        `INSERT INTO posts
+          (id, profile_id, published_at, body, url, source_checksum, source_kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        "career-graph-post",
+        "profile",
+        "2026-07-23T15:00:00.000Z",
+        "Career graph",
+        "https://social.example/posts/career-graph",
+        "synthetic",
+        "archive",
+      );
+    database
+      .prepare(
+        `INSERT INTO analytics_snapshots
+          (post_id, captured_at, impressions, reactions, comments, reposts)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run("career-graph-post", "2026-07-24T16:00:00.000Z", 10, 1, 0, 0);
+    database.close();
 
     run(home, [
       "checkpoint",

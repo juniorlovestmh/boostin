@@ -408,6 +408,7 @@ export function createProgram(): Command {
   outcomeCommand
     .command("add")
     .requiredOption("--occurred-at <date>")
+    .option("--campaign <slug>")
     .requiredOption("--type <type>")
     .requiredOption("--count <count>")
     .option("--note <note>")
@@ -415,6 +416,7 @@ export function createProgram(): Command {
     .action(
       (options: {
         occurredAt: string;
+        campaign?: string;
         type: string;
         count: string;
         note?: string;

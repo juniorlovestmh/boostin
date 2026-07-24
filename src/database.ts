@@ -84,6 +84,7 @@ function createCurrentSchema(database: Database.Database): void {
     );
     CREATE TABLE IF NOT EXISTS outcomes (
       id TEXT PRIMARY KEY,
+      campaign_id TEXT REFERENCES campaigns(id),
       occurred_at TEXT NOT NULL,
       type TEXT NOT NULL,
       count INTEGER NOT NULL,
@@ -131,14 +132,14 @@ function createCurrentSchema(database: Database.Database): void {
 
 function migrate(database: Database.Database, path: string, created: boolean): Database.Database {
   const version = database.pragma("user_version", { simple: true }) as number;
-  if (version > 2) {
+  if (version > 3) {
     database.close();
     throw new Error(`Database schema version ${version} is newer than this Boostin build`);
   }
   if (version === 0) {
     const apply = database.transaction(() => {
       createCurrentSchema(database);
-      database.pragma("user_version = 2");
+      database.pragma("user_version = 3");
     });
     apply();
     return database;
@@ -158,9 +159,10 @@ function migrate(database: Database.Database, path: string, created: boolean): D
       reopened.exec(`
         ALTER TABLE posts ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'archive';
         ALTER TABLE posts ADD COLUMN source_ref TEXT;
+        ALTER TABLE outcomes ADD COLUMN campaign_id TEXT REFERENCES campaigns(id);
       `);
       createCurrentSchema(reopened);
-      reopened.pragma("user_version = 2");
+      reopened.pragma("user_version = 3");
     });
     try {
       apply();
@@ -169,6 +171,10 @@ function migrate(database: Database.Database, path: string, created: boolean): D
       reopened.close();
       throw error;
     }
+  }
+  if (version === 2) {
+    database.exec("ALTER TABLE outcomes ADD COLUMN campaign_id TEXT REFERENCES campaigns(id)");
+    database.pragma("user_version = 3");
   }
   createCurrentSchema(database);
   return database;

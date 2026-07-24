@@ -44,15 +44,20 @@ def _pipeline_root() -> Path:
 
 def _derived_database_path() -> Path:
     configured = os.environ.get("BOOSTIN_PIPELINE_DB")
-    path = (
-        Path(configured).expanduser().resolve()
-        if configured
-        else _pipeline_root() / "boostin-pipeline.db"
-    )
+    root = _pipeline_root().resolve()
+    path = Path(configured).expanduser() if configured else root / "boostin-pipeline.db"
+    if not path.is_absolute():
+        raise ValueError("derived pipeline database path must be absolute")
+    try:
+        path.relative_to(root)
+    except ValueError as error:
+        raise ValueError("derived pipeline database must remain under the pipeline directory") from error
+    if path.exists() and path.is_symlink():
+        raise ValueError("refusing symbolic link for derived pipeline database")
+    if path.parent.exists() and path.parent.resolve() != path.parent:
+        raise ValueError("refusing symbolic link in derived pipeline database path")
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.parent.chmod(0o700)
-    if path.is_symlink():
-        raise ValueError("refusing symbolic link for derived pipeline database")
     return path
 
 
