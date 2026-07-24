@@ -58,7 +58,9 @@ At 24 hours, 72 hours, 7 days, and 30 days:
 2. Put it in `~/Library/Application Support/Boostin/inbox/`.
 3. Record a profile snapshot if the values are available.
 4. Process the inbox with the real capture time.
-5. Mark the checkpoint complete with that same capture time.
+5. Mark the checkpoint complete only after importing a matching first-party
+   analytics snapshot captured at or after the checkpoint's due time. Use the
+   capture timestamp for `--captured-at`; a timestamp alone is not evidence.
 6. Record qualified conversation counts without contact details.
 
 ```sh
@@ -83,6 +85,8 @@ boostin report campaign \
 
 Do not combine the measurements into a single growth score and do not claim
 that the post caused a conversation. Treat outcomes as self-reported signals.
+Campaign reports include only outcomes explicitly associated with this campaign;
+unassigned legacy outcomes are excluded.
 
 ## Follow-up
 

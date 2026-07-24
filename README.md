@@ -126,41 +126,12 @@ node dist/cli.js graph export-public \
 
 ## Campaign checkpoints
 
-Campaigns schedule measurement checkpoints without logging into a social
-network or automating engagement:
-
-```sh
-node dist/cli.js campaign start \
-  --slug linkedin-career-graph \
-  --article-url <canonical-article-url> \
-  --post-url https://www.linkedin.com/posts/example \
-  --published-at 2026-07-23T12:00:00-03:00
-
-node dist/cli.js due --json
-node dist/cli.js reminders install
-```
-
-The four checkpoints are 24 hours, 72 hours, 7 days, and 30 days after
-publication. Place an official archive or analytics workbook only in
-`~/Library/Application Support/Boostin/inbox/`, then process it explicitly:
-
-```sh
-node dist/cli.js inbox process \
-  --captured-at 2026-07-24T12:00:00-03:00
-node dist/cli.js checkpoint complete \
-  --campaign linkedin-career-graph \
-  --name 24h \
-  --captured-at 2026-07-24T12:00:00-03:00
-node dist/cli.js report campaign \
-  --slug linkedin-career-graph \
-  --private
-```
+Campaigns schedule measurement without logging into a social network or
+automating engagement. The complete campaign launch, checkpoint, and reporting
+workflow is maintained in the [LinkedIn career graph launch guide](docs/linkedin-career-graph-launch.md).
 
 `boostin due --json` is the stable read-only interface for Firstmate or another
 local supervisor. Boostin remains the only owner of the schedule.
-
-See the [LinkedIn career graph launch guide](docs/linkedin-career-graph-launch.md)
-for the campaign's canonical article URL and launch copy.
 
 Create a portable authenticated backup without putting the passphrase in shell
 history:
