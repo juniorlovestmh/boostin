@@ -3,7 +3,7 @@ title: "I built content analytics that refuses to log in for me"
 description: "A build note on Boostin, a local-first CLI for learning from my own professional content without scraping, browser automation, or engagement bots."
 seoTitle: "Local-first content analytics without scraping"
 publishedAt: 2026-07-21
-updatedAt: 2026-07-21
+updatedAt: 2026-07-24
 tags:
   - content-strategy
   - product-architecture
@@ -14,13 +14,16 @@ answerSummary:
   - A local SQLite database protected by FileVault keeps the working dataset inspectable and under the author's control.
   - Public reports should be generated from an explicit allowlist of aggregate fields, not by redacting a private report after the fact.
   - Human-controlled publishing is a product boundary, not a missing feature.
+  - A backup step should verify its own output — decrypt what it just wrote, check the database, before trusting the file — instead of assuming the write succeeded.
 faqs:
   - question: Does Boostin automate posting or engagement?
     answer: No. It does not log in, scrape pages, send messages, react, comment, follow, or publish. Drafting and publishing remain human-controlled.
   - question: Where does the imported data go?
-    answer: Boostin stores it in a local SQLite database. On macOS, real-data imports require FileVault to be enabled, and portable backups are independently encrypted with a passphrase.
+    answer: Boostin stores it in a local SQLite database. On macOS, the same FileVault gate protects every command that writes account-derived data — imports, profile snapshots, drafts, and outcomes — not only the initial import. Portable backups are independently encrypted with a passphrase.
   - question: What data can Boostin import?
     answer: The first release accepts the author's own official account archive and first-party post analytics workbook. It rejects unknown schemas instead of guessing.
+  - question: Are the outcomes Boostin tracks verified in any way?
+    answer: No. An outcome is a count or note the author types in by hand, and the data-minimization contract labels it self-reported everywhere it appears, including in reports. Boostin does not infer or verify that a post caused it.
 draft: true
 ---
 
@@ -53,7 +56,7 @@ Boostin never needs a LinkedIn password, session cookie, browser profile, or API
 
 A ZIP archive can contain path traversal, symbolic links, duplicate names, Unicode-normalization tricks, decompression bombs, or nested structures the importer was not designed to understand. A spreadsheet is a ZIP of XML files, which adds entity expansion, unexpected worksheets, malformed cell references, and schema drift.
 
-The importer therefore has strict limits for archive size, extracted size, entry size, compression ratio, sheet count, and row count. It rejects unsafe paths and XML declarations. It reads only the filenames it expects.
+The importer therefore has strict limits for archive size, extracted size, entry size, compression ratio, sheet count, and row count. It rejects unsafe paths and any `<!DOCTYPE` or `<!ENTITY` declaration in workbook XML before that XML is ever parsed, so an entity-expansion payload never reaches the parser. Every shared-string reference a worksheet cell points to is checked against the shared-string table before use, instead of trusting the index. It reads only the filenames it expects.
 
 It also fails closed on columns. If a platform export renames `Impressions` to `Views`, Boostin aborts the import transaction and reports the schema mismatch. It does not guess that the two fields are equivalent.
 
@@ -73,6 +76,8 @@ Drafting is allowed. Publishing is deliberately outside the tool.
 
 The first account archive binds the local database to its public profile identifier. A later archive for a different profile is rejected. When a newer full archive no longer includes a previously imported post, the post is tombstoned instead of silently deleted.
 
+Each import is also keyed by the checksum of the file it came from, so re-running the same archive is a recognized no-op rather than a duplicate insert or a silent second write.
+
 That preserves history without mixing identities.
 
 ### 3. Make private and public reports different products
@@ -85,11 +90,13 @@ That distinction matters because redaction asks, "Did I remember every secret?" 
 
 ### 4. Use ordinary local storage with explicit backup security
 
-The live database is ordinary SQLite with restrictive file permissions. On macOS, Boostin blocks real-data imports unless FileVault is enabled. Apple describes FileVault as its built-in capability for protecting data at rest across a volume ([Apple Platform Security](https://support.apple.com/guide/security/sec4c6dc1b6e/web)).
+The live database is ordinary SQLite with restrictive file permissions. On macOS, Boostin blocks every command that writes account-derived data — importing, recording a profile snapshot, drafting, and logging an outcome — unless FileVault is enabled. Apple describes FileVault as its built-in capability for protecting data at rest across a volume ([Apple Platform Security](https://support.apple.com/guide/security/sec4c6dc1b6e/web)).
 
 Portable backups have a different threat model. They may leave the machine, so Boostin encrypts each backup independently with a passphrase-derived key and authenticated encryption. A wrong passphrase fails before a database is written.
 
 This keeps the live database easy to inspect and repair while making exported backups portable without depending on one machine's keychain.
+
+The failure mode I cared most about was a backup that looks fine and isn't. So backup creation decrypts the envelope it just produced and checks the SQLite header before that file ever replaces anything on disk, and restore runs SQLite's own `integrity_check` on the recovered database before installing it. A wrong passphrase, or a corrupt write, is caught at the moment it happens instead of the day someone needs the backup.
 
 ## What I would reuse
 
