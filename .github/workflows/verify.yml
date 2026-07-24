@@ -14,8 +14,6 @@ jobs:
     timeout-minutes: 15
     env:
       BOOSTIN_ALLOW_MAIN_SSD_PIPELINE_ENV: "1"
-      BOOSTIN_PIPELINE_VENV: ${{ runner.temp }}/boostin-pipeline-venv
-      BOOSTIN_UV_CACHE_DIR: ${{ runner.temp }}/boostin-uv-cache
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
@@ -30,4 +28,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Configure pipeline temp directories
+        run: |
+          printf 'BOOSTIN_PIPELINE_VENV=%s/boostin-pipeline-venv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'BOOSTIN_UV_CACHE_DIR=%s/boostin-uv-cache\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - run: pnpm validate

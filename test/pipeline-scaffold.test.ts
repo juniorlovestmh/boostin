@@ -53,6 +53,9 @@ describe("Dagster pipeline", () => {
     expect(workflow).toContain('version: "0.11.31"');
     expect(workflow).toContain("uv python install 3.13");
     expect(workflow).toContain('BOOSTIN_ALLOW_MAIN_SSD_PIPELINE_ENV: "1"');
+    expect(workflow).toContain('"$GITHUB_ENV"');
+    expect(workflow).toContain('"$RUNNER_TEMP"');
+    expect(workflow).not.toContain("${{ runner.temp }}");
   });
 
   it("exposes materialization now that promotion checks exist", () => {
