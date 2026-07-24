@@ -133,6 +133,22 @@ export function completeCheckpoint(input: {
   }
   const { database } = openDatabase();
   try {
+    const capturedAt = new Date(input.capturedAt).toISOString();
+    const evidence = database
+      .prepare(`
+        SELECT 1
+        FROM analytics_snapshots a
+        JOIN posts p ON p.id = a.post_id
+        WHERE p.url = (SELECT post_url FROM campaigns WHERE slug = ?)
+          AND a.captured_at IN (?, ?)
+        LIMIT 1
+      `)
+      .get(input.campaign, input.capturedAt, capturedAt);
+    if (!evidence) {
+      throw new Error(
+        `No imported analytics snapshot for ${input.campaign}/${input.name} at ${capturedAt}`,
+      );
+    }
     const result = database
       .prepare(`
         UPDATE checkpoints
@@ -140,7 +156,7 @@ export function completeCheckpoint(input: {
         WHERE campaign_id = (SELECT id FROM campaigns WHERE slug = ?)
           AND name = ?
       `)
-      .run(now().toISOString(), new Date(input.capturedAt).toISOString(), input.campaign, input.name);
+      .run(now().toISOString(), capturedAt, input.campaign, input.name);
     if (result.changes !== 1) {
       throw new Error(`Unknown campaign checkpoint: ${input.campaign}/${input.name}`);
     }
@@ -309,11 +325,11 @@ export function campaignReport(input: {
       .prepare(`
         SELECT type, SUM(count) AS count
         FROM outcomes
-        WHERE occurred_at >= ?
+        WHERE campaign_id = ?
         GROUP BY type
         ORDER BY type
       `)
-      .all(campaign.published_at) as Array<{ type: string; count: number }>;
+      .all(campaign.id) as Array<{ type: string; count: number }>;
     const lines = [
       "# Boostin private campaign report",
       "",

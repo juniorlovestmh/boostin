@@ -32,8 +32,8 @@ reproduce a historical materialization. Silver placeholder resolution uses the l
 Ollama model `nomic-embed-text:latest`; override only the local model name with
 `BOOSTIN_PIPELINE_EMBEDDING_MODEL`.
 
-Automatic resolution is conservative: similarity must be at least `0.55` and
-the winning candidate must lead by at least `0.02`. Records below either
+Automatic resolution is conservative: similarity must be at least `0.75` and
+the winning candidate must lead by at least `0.05`. Records below either
 threshold remain in `silver_nodes` with status `quarantined`. They do not enter
 Gold and are never silently dropped.
 
