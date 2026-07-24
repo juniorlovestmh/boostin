@@ -58,7 +58,7 @@ describe("boostin init", () => {
 
     const migrated = new Database(path, { readonly: true });
     try {
-      expect(migrated.pragma("user_version", { simple: true })).toBe(2);
+      expect(migrated.pragma("user_version", { simple: true })).toBe(3);
       const columns = migrated.pragma("table_info(posts)") as Array<{
         name: string;
       }>;
