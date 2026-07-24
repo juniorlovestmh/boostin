@@ -157,7 +157,7 @@ export async function importPosts(path: string): Promise<ImportPostsResult> {
     }
 
     const findByUrl = database.prepare(
-      "SELECT id FROM posts WHERE url = ? LIMIT 1",
+      "SELECT id FROM posts WHERE url = ? AND deleted_at IS NULL ORDER BY published_at DESC LIMIT 1",
     );
     const insert = database.prepare(`
       INSERT INTO posts
@@ -181,6 +181,7 @@ export async function importPosts(path: string): Promise<ImportPostsResult> {
           deleted_at = NULL
       WHERE id = ?
     `);
+    let importedCount = 0;
     const commit = database.transaction(() => {
       database
         .prepare("INSERT OR IGNORE INTO metadata (key, value) VALUES ('profile_id', ?)")
@@ -197,6 +198,10 @@ export async function importPosts(path: string): Promise<ImportPostsResult> {
         if (adapter === "linkedin-legacy" && !row.ShareCommentary) {
           throw new Error(`${sharesName} contains a row without ShareCommentary`);
         }
+        if (adapter === "linkedin-2026" && !row.ShareCommentary) {
+          continue;
+        }
+        importedCount += 1;
         const url = row.ShareLink || null;
         const existing = url
           ? (findByUrl.get(url) as { id: string } | undefined)
@@ -232,7 +237,7 @@ export async function importPosts(path: string): Promise<ImportPostsResult> {
     });
     commit();
     return {
-      imported: shares.length,
+      imported: importedCount,
       skipped: false,
       profileId,
       adapter,

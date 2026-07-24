@@ -226,7 +226,6 @@ export function createProgram(): Command {
     .description("List overdue campaign checkpoints")
     .option("--json")
     .action((options: { json?: boolean }) => {
-      requireFileVaultForRealImport();
       const result = dueCheckpoints();
       process.stdout.write(
         options.json
