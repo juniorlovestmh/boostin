@@ -131,7 +131,7 @@ network or automating engagement:
 ```sh
 node dist/cli.js campaign start \
   --slug linkedin-career-graph \
-  --article-url https://appheat.co/posts/linkedin-career-graph/ \
+  --article-url <canonical-article-url> \
   --post-url https://www.linkedin.com/posts/example \
   --published-at 2026-07-23T12:00:00-03:00
 
@@ -157,6 +157,9 @@ node dist/cli.js report campaign \
 
 `boostin due --json` is the stable read-only interface for Firstmate or another
 local supervisor. Boostin remains the only owner of the schedule.
+
+See the [LinkedIn career graph launch guide](docs/linkedin-career-graph-launch.md)
+for the campaign's canonical article URL and launch copy.
 
 Create a portable authenticated backup without putting the passphrase in shell
 history:
