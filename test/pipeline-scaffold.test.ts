@@ -190,6 +190,11 @@ printf '%s\\n%s\\n' "$UV_CACHE_DIR" "$UV_PROJECT_ENVIRONMENT" > "$BOOSTIN_PIPELI
         fakeUv,
         `#!/bin/sh
 set -eu
+recorded="$DAGSTER_HOME/.boostin-test-recorded"
+if [ -e "$recorded" ]; then
+  exit 0
+fi
+: > "$recorded"
 home_mode="$(stat -f '%Lp' "$DAGSTER_HOME" 2>/dev/null || stat -c '%a' "$DAGSTER_HOME")"
 config_mode="$(stat -f '%Lp' "$DAGSTER_HOME/dagster.yaml" 2>/dev/null || stat -c '%a' "$DAGSTER_HOME/dagster.yaml")"
 : > "$DAGSTER_HOME/child-state"
