@@ -4,6 +4,7 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -82,7 +83,10 @@ function mkdirPrivate(path: string): void {
 }
 
 function chmodTreePrivate(path: string): void {
-  const stats = statSync(path);
+  const stats = lstatSync(path);
+  if (stats.isSymbolicLink()) {
+    return;
+  }
   if (stats.isDirectory()) {
     chmodSync(path, 0o700);
     for (const name of readdirSync(path)) chmodTreePrivate(join(path, name));
@@ -957,7 +961,7 @@ export function exportPublicGraph(input: {
   const publicIds = new Set<string>();
   for (const node of allowlist.nodes) {
     if (!node.id || !node.label || !graphNodeIds.has(node.sourceId)) {
-      throw new Error(`Allowlisted node is not present in the private graph: ${node.id}`);
+      throw new Error(`Allowlisted node is not present in the private graph: ${node.sourceId}`);
     }
     if (publicIds.has(node.id)) throw new Error(`Duplicate public node id: ${node.id}`);
     publicIds.add(node.id);

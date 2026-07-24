@@ -14,8 +14,8 @@ from typing import Any, Callable
 import dagster as dg
 
 SCHEMA_VERSION = 1
-SIMILARITY_THRESHOLD = 0.55
-MARGIN_THRESHOLD = 0.02
+SIMILARITY_THRESHOLD = 0.75
+MARGIN_THRESHOLD = 0.05
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
 PLACEHOLDER_PATTERN = re.compile(
     r"^(?:human readable name|placeholder(?: entity)?|unknown|unnamed|entity)$",
@@ -667,23 +667,24 @@ def build_gold(silver: Graph) -> Graph:
         }
         for (source, target, relation), count in sorted(edges.items())
     ]
+    component_count = 0
     if nodes:
         adjacency = {node["canonical_id"]: set() for node in nodes}
         for edge in gold_edges:
             adjacency[edge["source_id"]].add(edge["target_id"])
             adjacency[edge["target_id"]].add(edge["source_id"])
-        pending = [nodes[0]["canonical_id"]]
-        visited = set(pending)
-        while pending:
-            current = pending.pop()
-            for neighbor in adjacency[current]:
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    pending.append(neighbor)
-        if len(visited) != len(nodes):
-            raise ValueError(
-                "Gold promotion failed: resolved graph is disconnected"
-            )
+        remaining = {node["canonical_id"] for node in nodes}
+        while remaining:
+            component_count += 1
+            pending = [next(iter(remaining))]
+            visited = set(pending)
+            while pending:
+                current = pending.pop()
+                for neighbor in adjacency[current]:
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        pending.append(neighbor)
+            remaining -= visited
     insights = {
         "graph_summary": {
             "nodes": len(nodes),
@@ -693,6 +694,7 @@ def build_gold(silver: Graph) -> Graph:
                 for node in silver["silver_nodes"]
             ),
             "confidence": "derived-private",
+            "component_count": component_count,
         }
     }
     return {**silver, "gold_nodes": nodes, "gold_edges": gold_edges, "insights": insights}
@@ -900,18 +902,21 @@ def _persist_gold(gold: Graph) -> None:
                     for key, value in gold["insights"].items()
                 ],
             )
+            component_count = gold["insights"]["graph_summary"]["component_count"]
             database.execute(
                 """
                 INSERT INTO quality_results
                   (run_id, check_name, passed, details_json)
-                VALUES (?, 'gold_connected', 1, ?)
+                VALUES (?, 'gold_connected', ?, ?)
                 """,
                 (
                     gold["run_id"],
+                    1 if component_count <= 1 else 0,
                     json.dumps(
                         {
                             "nodes": len(gold["gold_nodes"]),
                             "edges": len(gold["gold_edges"]),
+                            "component_count": component_count,
                         },
                         sort_keys=True,
                     ),
@@ -970,10 +975,16 @@ def silver_graph(context, bronze_graph: Graph) -> Graph:
 def gold_graph(context, silver_graph: Graph) -> Graph:
     gold = build_gold(silver_graph)
     _persist_gold(gold)
+    component_count = gold["insights"]["graph_summary"]["component_count"]
+    if component_count > 1:
+        context.log.warning(
+            f"Resolved graph has {component_count} disconnected components"
+        )
     context.add_output_metadata(
         {
             "node_count": len(gold["gold_nodes"]),
             "edge_count": len(gold["gold_edges"]),
+            "component_count": component_count,
         }
     )
     return gold

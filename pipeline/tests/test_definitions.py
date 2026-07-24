@@ -236,6 +236,132 @@ def test_materialization_retains_lineage_and_writes_only_derived_state(
         derived.close()
 
 
+def _materialize_with_review(
+    pipeline_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, dict[str, object]]:
+    dagster_home = tmp_path / "dagster"
+    dagster_home.mkdir()
+    monkeypatch.setenv("DAGSTER_HOME", str(dagster_home))
+    result = dg.materialize(assets=[bronze_graph, silver_graph, gold_graph])
+    assert result.success
+    review_path = pipeline_home / "pipeline" / "review-decisions.json"
+    review = json.loads(review_path.read_text(encoding="utf8"))
+    return review_path, review
+
+
+def test_review_checksum_guard_rejects_tampered_file(
+    pipeline_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    review_path, review = _materialize_with_review(pipeline_home, tmp_path, monkeypatch)
+    review["sourceChecksum"] = "tampered"
+    review["decisions"] = [{"rawId": "uncertain", "action": "reject"}]
+    review_path.write_text(json.dumps(review), encoding="utf8")
+
+    with pytest.raises(ValueError, match="invalid or stale"):
+        dg.materialize(assets=[bronze_graph, silver_graph, gold_graph])
+
+
+def test_review_merge_decision_reuses_existing_canonical(
+    pipeline_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    review_path, review = _materialize_with_review(pipeline_home, tmp_path, monkeypatch)
+    review["decisions"] = [
+        {"rawId": "uncertain", "action": "merge", "canonicalId": "revenue-operations"},
+    ]
+    review_path.write_text(json.dumps(review), encoding="utf8")
+
+    result = dg.materialize(assets=[bronze_graph, silver_graph, gold_graph])
+    assert result.success
+
+    derived_path = pipeline_home / "pipeline" / "boostin-pipeline.db"
+    derived = sqlite3.connect(derived_path)
+    try:
+        assert derived.execute(
+            "SELECT canonical_id, status, method FROM silver_nodes WHERE raw_id = 'uncertain'"
+        ).fetchone() == ("revenue-operations", "merged", "human-review")
+    finally:
+        derived.close()
+
+
+def test_review_merge_decision_rejects_unknown_canonical(
+    pipeline_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    review_path, review = _materialize_with_review(pipeline_home, tmp_path, monkeypatch)
+    review["decisions"] = [
+        {"rawId": "uncertain", "action": "merge", "canonicalId": "does-not-exist"},
+    ]
+    review_path.write_text(json.dumps(review), encoding="utf8")
+
+    with pytest.raises(ValueError, match="unknown canonical ID"):
+        dg.materialize(assets=[bronze_graph, silver_graph, gold_graph])
+
+
+def test_review_resolve_decision_creates_new_canonical(
+    pipeline_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    review_path, review = _materialize_with_review(pipeline_home, tmp_path, monkeypatch)
+    review["decisions"] = [
+        {
+            "rawId": "uncertain",
+            "action": "resolve",
+            "canonicalId": "new-entity",
+            "label": "New Entity",
+        },
+    ]
+    review_path.write_text(json.dumps(review), encoding="utf8")
+
+    result = dg.materialize(assets=[bronze_graph, silver_graph, gold_graph])
+    assert result.success
+
+    derived_path = pipeline_home / "pipeline" / "boostin-pipeline.db"
+    derived = sqlite3.connect(derived_path)
+    try:
+        assert derived.execute(
+            "SELECT canonical_id, status, method FROM silver_nodes WHERE raw_id = 'uncertain'"
+        ).fetchone() == ("new-entity", "resolved", "human-review")
+        assert derived.execute(
+            "SELECT canonical_id FROM gold_nodes WHERE canonical_id = 'new-entity'"
+        ).fetchone() == ("new-entity",)
+    finally:
+        derived.close()
+
+
+def test_review_resolve_decision_rejects_duplicate_canonical(
+    pipeline_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    review_path, review = _materialize_with_review(pipeline_home, tmp_path, monkeypatch)
+    review["decisions"] = [
+        {
+            "rawId": "uncertain",
+            "action": "resolve",
+            "canonicalId": "revenue-operations",
+            "label": "Revenue Operations",
+        },
+    ]
+    review_path.write_text(json.dumps(review), encoding="utf8")
+
+    with pytest.raises(ValueError, match="requires a unique ID"):
+        dg.materialize(assets=[bronze_graph, silver_graph, gold_graph])
+
+
+def test_review_resolve_decision_rejects_placeholder_label(
+    pipeline_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    review_path, review = _materialize_with_review(pipeline_home, tmp_path, monkeypatch)
+    review["decisions"] = [
+        {
+            "rawId": "uncertain",
+            "action": "resolve",
+            "canonicalId": "new-entity",
+            "label": "Placeholder Entity",
+        },
+    ]
+    review_path.write_text(json.dumps(review), encoding="utf8")
+
+    with pytest.raises(ValueError, match="requires a unique ID"):
+        dg.materialize(assets=[bronze_graph, silver_graph, gold_graph])
+
+
 def test_bronze_rejects_dangling_edges(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
