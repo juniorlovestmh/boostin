@@ -30,6 +30,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Configure pipeline temp directories
         run: |
-          printf 'BOOSTIN_PIPELINE_VENV=%s/boostin-pipeline-venv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
-          printf 'BOOSTIN_UV_CACHE_DIR=%s/boostin-uv-cache\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          pipeline_run_key="${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
+          printf 'BOOSTIN_PIPELINE_VENV=%s/boostin-pipeline-venv-%s\n' "$RUNNER_TEMP" "$pipeline_run_key" >> "$GITHUB_ENV"
+          printf 'BOOSTIN_UV_CACHE_DIR=%s/boostin-uv-cache-%s\n' "$RUNNER_TEMP" "$pipeline_run_key" >> "$GITHUB_ENV"
       - run: pnpm validate
