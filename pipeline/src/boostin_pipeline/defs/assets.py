@@ -299,7 +299,10 @@ def _normalize_label(value: str) -> str:
 
 def _canonical_id(value: str) -> str:
     normalized = re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
-    return normalized[:100] or hashlib.sha256(value.encode()).hexdigest()[:16]
+    if len(normalized) > 100:
+        digest = hashlib.sha256(value.encode()).hexdigest()[:16]
+        return f"{normalized[:83]}-{digest}"
+    return normalized or hashlib.sha256(value.encode()).hexdigest()[:16]
 
 
 def _is_placeholder(label: str) -> bool:
@@ -389,6 +392,11 @@ def _apply_review_decisions(
     silver: list[Graph],
     candidates: list[Graph],
 ) -> None:
+    # Standalone graph resolution (for example, callers testing canonical ID
+    # generation) does not have persisted source lineage to bind a review
+    # file to. Only materialized bronze graphs participate in review state.
+    if "source_checksum" not in bronze:
+        return
     path = _review_path()
     quarantined = [
         node for node in silver if node["status"] == "quarantined"

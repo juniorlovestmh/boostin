@@ -25,8 +25,8 @@
 - Weak, reused, disclosed, or forgotten backup passphrases
 
 Core commands make no network calls and emit no telemetry. The database lives
-outside project workspaces and uses mode 0600. Real imports fail closed while
-FileVault is unavailable.
+outside project workspaces and uses mode 0600. Import, snapshot, draft, and
+outcome commands fail closed while FileVault is unavailable.
 
 Graph generation is the one explicit local-service integration. Boostin invokes
 Graphify with the Ollama backend over the local machine only. It does not accept
