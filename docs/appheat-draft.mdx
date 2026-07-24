@@ -90,7 +90,7 @@ That distinction matters because redaction asks, "Did I remember every secret?" 
 
 ### 4. Use ordinary local storage with explicit backup security
 
-The live database is ordinary SQLite with restrictive file permissions. On macOS, Boostin blocks every command that writes account-derived data — importing, recording a profile snapshot, drafting, and logging an outcome — unless FileVault is enabled. Apple describes FileVault as its built-in capability for protecting data at rest across a volume ([Apple Platform Security](https://support.apple.com/guide/security/sec4c6dc1b6e/web)).
+The live database is ordinary SQLite with restrictive file permissions. On macOS, FileVault is required for imports, profile snapshots, drafts, and outcomes. Apple describes FileVault as its built-in capability for protecting data at rest across a volume ([Apple Platform Security](https://support.apple.com/guide/security/sec4c6dc1b6e/web)).
 
 Portable backups have a different threat model. They may leave the machine, so Boostin encrypts each backup independently with a passphrase-derived key and authenticated encryption. A wrong passphrase fails before a database is written.
 
