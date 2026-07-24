@@ -392,6 +392,11 @@ def _apply_review_decisions(
     silver: list[Graph],
     candidates: list[Graph],
 ) -> None:
+    # Standalone graph resolution (for example, callers testing canonical ID
+    # generation) does not have persisted source lineage to bind a review
+    # file to. Only materialized bronze graphs participate in review state.
+    if "source_checksum" not in bronze:
+        return
     path = _review_path()
     quarantined = [
         node for node in silver if node["status"] == "quarantined"
